@@ -1,0 +1,79 @@
+# ATT&CK Technique → Tactic mapping (subset used by default rules)
+# Add entries here to extend label accuracy without changing code.
+
+T1059:
+  name: Command and Scripting Interpreter
+  tactic: Execution
+
+T1059.001:
+  name: PowerShell
+  tactic: Execution
+
+T1059.003:
+  name: Windows Command Shell
+  tactic: Execution
+
+T1078:
+  name: Valid Accounts
+  tactic: Initial Access
+
+T1078.003:
+  name: Local Accounts
+  tactic: Privilege Escalation
+
+T1053:
+  name: Scheduled Task/Job
+  tactic: Persistence
+
+T1053.005:
+  name: Scheduled Task
+  tactic: Persistence
+
+T1082:
+  name: System Information Discovery
+  tactic: Discovery
+
+T1083:
+  name: File and Directory Discovery
+  tactic: Discovery
+
+T1003:
+  name: OS Credential Dumping
+  tactic: Credential Access
+
+T1003.001:
+  name: LSASS Memory
+  tactic: Credential Access
+
+T1021:
+  name: Remote Services
+  tactic: Lateral Movement
+
+T1021.001:
+  name: Remote Desktop Protocol
+  tactic: Lateral Movement
+
+T1105:
+  name: Ingress Tool Transfer
+  tactic: Command and Control
+
+T1486:
+  name: Data Encrypted for Impact
+  tactic: Impact
+
+T1070:
+  name: Indicator Removal
+  tactic: Defense Evasion
+
+T1055:
+  name: Process Injection
+  tactic: Privilege Escalation
+
+T1110:
+  name: Brute Force
+  tactic: Credential Access
+
+T1190:
+  name: Exploit Public-Facing Application
+  tactic: Initial Access
+

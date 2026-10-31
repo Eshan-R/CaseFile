@@ -1,0 +1,147 @@
+# CaseFile default detection rules
+# Format: list of rule objects
+
+- rule_id: "CF-001"
+  name: "Suspicious PowerShell Execution"
+  description: "PowerShell launched with encoded command or bypass flags."
+  technique_id: "T1059.001"
+  tactic: "Execution"
+  severity: 7
+  conditions:
+    - field: process_name
+      op: eq
+      value: powershell.exe
+    - field: cmd
+      op: contains
+      value: "-EncodedCommand"
+  logic: any
+
+- rule_id: "CF-002"
+  name: "Scheduled Task Creation"
+  description: "schtasks.exe used to create a new task."
+  technique_id: "T1053.005"
+  tactic: "Persistence"
+  severity: 6
+  conditions:
+    - field: process_name
+      op: contains
+      value: schtasks
+    - field: cmd
+      op: contains
+      value: /create
+  logic: all
+
+- rule_id: "CF-003"
+  name: "Credential Dump via LSASS"
+  description: "Access to lsass.exe memory."
+  technique_id: "T1003.001"
+  tactic: "Credential Access"
+  severity: 9
+  conditions:
+    - field: cmd
+      op: contains
+      value: lsass
+  logic: any
+
+- rule_id: "CF-004"
+  name: "Brute Force Authentication"
+  description: "Multiple failed logins from the same source."
+  technique_id: "T1110"
+  tactic: "Credential Access"
+  severity: 6
+  conditions:
+    - field: cmd
+      op: contains
+      value: "Failed password"
+  logic: any
+
+- rule_id: "CF-005"
+  name: "System Discovery via systeminfo"
+  description: "systeminfo or uname executed."
+  technique_id: "T1082"
+  tactic: "Discovery"
+  severity: 3
+  conditions:
+    - field: process_name
+      op: contains
+      value: systeminfo
+    - field: cmd
+      op: contains
+      value: uname
+  logic: any
+
+- rule_id: "CF-006"
+  name: "Remote Desktop Access"
+  description: "Inbound RDP connection (port 3389)."
+  technique_id: "T1021.001"
+  tactic: "Lateral Movement"
+  severity: 5
+  conditions:
+    - field: dst_port
+      op: eq
+      value: "3389"
+  logic: all
+
+- rule_id: "CF-007"
+  name: "Log Clearing"
+  description: "Windows event log or /var/log cleared."
+  technique_id: "T1070"
+  tactic: "Defense Evasion"
+  severity: 8
+  conditions:
+    - field: cmd
+      op: contains
+      value: "Clear-EventLog"
+    - field: cmd
+      op: contains
+      value: "wevtutil cl"
+    - field: cmd
+      op: contains
+      value: "rm -rf /var/log"
+  logic: any
+
+- rule_id: "CF-008"
+  name: "File Transfer Tool Detected"
+  description: "curl, wget, certutil used for downloads."
+  technique_id: "T1105"
+  tactic: "Command and Control"
+  severity: 5
+  conditions:
+    - field: cmd
+      op: contains
+      value: "curl "
+    - field: cmd
+      op: contains
+      value: "wget "
+    - field: cmd
+      op: contains
+      value: certutil
+  logic: any
+
+- rule_id: "CF-009"
+  name: "Privilege Escalation via sudo"
+  description: "sudo usage with high-risk commands."
+  technique_id: "T1078.003"
+  tactic: "Privilege Escalation"
+  severity: 6
+  conditions:
+    - field: cmd
+      op: contains
+      value: "sudo "
+  logic: any
+
+- rule_id: "CF-010"
+  name: "Ransomware File Encryption"
+  description: "Known ransomware extension or encryption tool."
+  technique_id: "T1486"
+  tactic: "Impact"
+  severity: 10
+  conditions:
+    - field: file_path
+      op: contains
+      value: ".encrypted"
+    - field: cmd
+      op: contains
+      value: openssl enc
+  logic: any
+

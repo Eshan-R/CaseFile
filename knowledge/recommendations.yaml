@@ -1,0 +1,16 @@
+# Tactic → remediation recommendation mapping
+# Used by the reach engine to annotate reachable nodes.
+
+Execution: "Restrict script interpreter access; enable AppLocker or WDAC policies."
+Persistence: "Audit scheduled tasks, startup entries, and registry run keys regularly."
+"Privilege Escalation": "Apply least-privilege; patch known local escalation vulnerabilities."
+"Defense Evasion": "Enable SIEM alerting on log-clearing events and timestomping."
+"Credential Access": "Enable credential guard; enforce MFA; rotate secrets post-incident."
+Discovery: "Limit network enumeration; segment hosts; monitor LDAP/DNS queries."
+"Lateral Movement": "Segment VLANs; restrict RDP/SMB; monitor for unusual authentication."
+"Command and Control": "Block C2 IoCs at perimeter; enforce DNS filtering."
+Exfiltration: "Monitor large outbound transfers; enforce DLP policies."
+Impact: "Maintain offline backups; test restore procedures regularly."
+"Initial Access": "Patch internet-facing services promptly; enforce MFA on VPN/email."
+Collection: "Monitor access to sensitive directories and cloud storage buckets."
+

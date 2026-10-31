@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CaseFile – Security Incident Explorer</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e2e8f0; display: flex; flex-direction: column; height: 100vh; }
+    header { padding: 0.75rem 1.5rem; background: #1e2130; border-bottom: 1px solid #2d3748; display: flex; align-items: center; gap: 1rem; }
+    header h1 { font-size: 1.2rem; font-weight: 700; color: #63b3ed; }
+    header span { font-size: 0.75rem; color: #718096; }
+    #toolbar { padding: 0.5rem 1.5rem; background: #171923; border-bottom: 1px solid #2d3748; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
+    #toolbar button { padding: 0.35rem 0.85rem; border-radius: 4px; border: 1px solid #4a5568; background: #2d3748; color: #e2e8f0; cursor: pointer; font-size: 0.8rem; }
+    #toolbar button:hover { background: #4a5568; }
+    #main { display: flex; flex: 1; overflow: hidden; }
+    #sidebar { width: 300px; min-width: 220px; max-width: 400px; background: #1a1d2e; border-right: 1px solid #2d3748; overflow-y: auto; padding: 1rem; font-size: 0.82rem; }
+    #sidebar h2 { color: #90cdf4; margin-bottom: 0.5rem; font-size: 0.9rem; }
+    .inc-card { background: #2d3748; border-radius: 6px; padding: 0.6rem 0.8rem; margin-bottom: 0.5rem; cursor: pointer; border-left: 3px solid #4a5568; }
+    .inc-card:hover, .inc-card.active { border-left-color: #63b3ed; background: #354060; }
+    .inc-card .title { font-weight: 600; color: #e2e8f0; margin-bottom: 0.2rem; word-break: break-all; font-size: 0.8rem; }
+    .inc-card .meta { color: #718096; font-size: 0.72rem; }
+    .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.7rem; margin-right: 0.25rem; }
+    .sev-high { background: #c53030; }
+    .sev-med { background: #d69e2e; color: #1a1d2e; }
+    .sev-low { background: #276749; }
+    #graph-area { flex: 1; position: relative; }
+    #cy { width: 100%; height: 100%; }
+    #detail-panel { width: 320px; background: #1a1d2e; border-left: 1px solid #2d3748; overflow-y: auto; padding: 1rem; font-size: 0.82rem; display: none; }
+    #detail-panel.open { display: block; }
+    #detail-panel h2 { color: #90cdf4; margin-bottom: 0.5rem; }
+    #detail-panel pre { background: #0f1117; border-radius: 4px; padding: 0.5rem; font-size: 0.72rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
+    #status-bar { padding: 0.3rem 1rem; background: #171923; border-top: 1px solid #2d3748; font-size: 0.72rem; color: #718096; }
+    .path-timeline { list-style: none; border-left: 2px solid #4a5568; margin-left: 0.5rem; padding-left: 1rem; }
+    .path-timeline li { margin-bottom: 0.75rem; position: relative; }
+    .path-timeline li::before { content: ''; position: absolute; left: -1.35rem; top: 0.35rem; width: 10px; height: 10px; border-radius: 50%; background: #63b3ed; border: 2px solid #1a1d2e; }
+    .tactic-tag { font-size: 0.68rem; background: #2c5282; padding: 0.1rem 0.3rem; border-radius: 3px; margin-left: 0.3rem; }
+  </style>
+</head>
+<body>
+<header>
+  <h1>🛡 CaseFile</h1>
+  <span id="header-stats">Loading…</span>
+  <div style="flex:1"></div>
+  <a href="/api/docs" style="color:#63b3ed;font-size:0.78rem;">API Docs</a>
+</header>
+
+<div id="toolbar">
+  <button onclick="loadIncidents()">↺ Refresh</button>
+  <button onclick="showIngestModal()">⬆ Ingest</button>
+  <button onclick="triggerAnalyse()">⚡ Analyse</button>
+  <select id="view-select" style="background:#2d3748;color:#e2e8f0;border:1px solid #4a5568;padding:0.3rem 0.5rem;border-radius:4px;font-size:0.8rem;" onchange="switchView()">
+    <option value="graph">Entity Graph</option>
+    <option value="path">Kill Chain Path</option>
+    <option value="reach">Reach Analysis</option>
+  </select>
+  <span id="toolbar-status" style="color:#68d391;font-size:0.78rem;"></span>
+</div>
+
+<div id="main">
+  <div id="sidebar">
+    <h2>Incidents <span id="inc-count" style="color:#718096;"></span></h2>
+    <div id="incident-list">Loading…</div>
+  </div>
+
+  <div id="graph-area">
+    <div id="cy"></div>
+    <div id="path-view" style="display:none;padding:1rem;overflow-y:auto;height:100%;">
+      <h2 style="color:#90cdf4;margin-bottom:1rem;">Kill Chain Timeline</h2>
+      <ul class="path-timeline" id="path-list"></ul>
+    </div>
+    <div id="reach-view" style="display:none;padding:1rem;overflow-y:auto;height:100%;">
+      <h2 style="color:#90cdf4;margin-bottom:1rem;">Attacker Reach</h2>
+      <div id="reach-list"></div>
+    </div>
+  </div>
+
+  <div id="detail-panel">
+    <h2>Detail</h2>
+    <div id="detail-content"></div>
+  </div>
+</div>
+
+<div id="status-bar" id="status-bar">Ready.</div>
+
+<script>
+const API = '/api/v1';
+let currentIncidentId = null;
+let cy = null;
+
+async function api(path) {
+  const r = await fetch(API + path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function apiPost(path, body={}) {
+  const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+function status(msg, color='#68d391') {
+  document.getElementById('toolbar-status').textContent = msg;
+  document.getElementById('toolbar-status').style.color = color;
+}
+
+async function loadStats() {
+  try {
+    const s = await api('/stats');
+    document.getElementById('header-stats').textContent =
+      `${s.total_events} events · ${s.total_detections} detections · ${s.total_incidents} incidents`;
+  } catch(e) {}
+}
+
+async function loadIncidents() {
+  status('Loading…', '#a0aec0');
+  try {
+    const data = await api('/incidents?limit=100');
+    const el = document.getElementById('incident-list');
+    document.getElementById('inc-count').textContent = `(${data.total})`;
+    if (!data.items.length) { el.innerHTML = '<div style="color:#718096;font-size:0.78rem;">No incidents yet.</div>'; return; }
+    el.innerHTML = '';
+    data.items.forEach(inc => {
+      const sev = inc.severity >= 8 ? 'sev-high' : inc.severity >= 5 ? 'sev-med' : 'sev-low';
+      const card = document.createElement('div');
+      card.className = 'inc-card';
+      card.innerHTML = `
+        <div class="title"><span class="badge ${sev}">${inc.severity}</span>${inc.title}</div>
+        <div class="meta">${inc.incident_id} · ${inc.hosts.slice(0,3).join(', ')} · ${String(inc.first_seen).slice(0,19)}</div>
+        <div class="meta" style="margin-top:0.2rem;">${inc.techniques.slice(0,4).join(' → ')}</div>
+      `;
+      card.onclick = () => selectIncident(inc.incident_id, card);
+      el.appendChild(card);
+    });
+    status('');
+    await loadStats();
+  } catch(e) { status('Error: ' + e.message, '#fc8181'); }
+}
+
+async function selectIncident(id, card) {
+  document.querySelectorAll('.inc-card').forEach(c => c.classList.remove('active'));
+  if (card) card.classList.add('active');
+  currentIncidentId = id;
+  switchView();
+}
+
+function switchView() {
+  const view = document.getElementById('view-select').value;
+  document.getElementById('cy').style.display = 'none';
+  document.getElementById('path-view').style.display = 'none';
+  document.getElementById('reach-view').style.display = 'none';
+
+  if (view === 'graph') { document.getElementById('cy').style.display = 'block'; loadGraph(); }
+  else if (view === 'path') { document.getElementById('path-view').style.display = 'block'; loadPath(); }
+  else if (view === 'reach') { document.getElementById('reach-view').style.display = 'block'; loadReach(); }
+}
+
+async function loadGraph() {
+  if (!currentIncidentId) return;
+  status('Loading graph…', '#a0aec0');
+  try {
+    const data = await api(`/incidents/${currentIncidentId}/graph`);
+    renderGraph(data);
+    status('');
+  } catch(e) { status('Graph: ' + e.message, '#fc8181'); }
+}
+
+function renderGraph(data) {
+  const kindColors = { host:'#3182ce', user:'#68d391', ip:'#f6ad55', technique:'#fc8181', process:'#b794f4', unknown:'#718096' };
+  const elements = [
+    ...data.nodes.map(n => ({ data: { id: n.id, label: n.label, kind: n.kind, ...n.data } })),
+    ...data.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target, label: e.label } })),
+  ];
+  if (cy) cy.destroy();
+  cy = cytoscape({
+    container: document.getElementById('cy'),
+    elements,
+    style: [
+      { selector: 'node', style: { label: 'data(label)', 'background-color': n => kindColors[n.data('kind')] || '#718096', color: '#e2e8f0', 'font-size': 10, 'text-valign': 'bottom', 'text-margin-y': 5 } },
+      { selector: 'edge', style: { label: 'data(label)', 'font-size': 9, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'line-color': '#4a5568', 'target-arrow-color': '#4a5568', color: '#a0aec0' } },
+      { selector: ':selected', style: { 'background-color': '#63b3ed', 'line-color': '#63b3ed' } },
+    ],
+    layout: { name: 'cose', animate: true, padding: 40, nodeRepulsion: 8000, idealEdgeLength: 100 },
+  });
+  cy.on('tap', 'node', evt => {
+    const d = evt.target.data();
+    const panel = document.getElementById('detail-panel');
+    document.getElementById('detail-content').innerHTML = `<pre>${JSON.stringify(d, null, 2)}</pre>`;
+    panel.classList.add('open');
+  });
+}
+
+async function loadPath() {
+  if (!currentIncidentId) return;
+  status('Loading path…', '#a0aec0');
+  try {
+    const data = await api(`/incidents/${currentIncidentId}/path`);
+    const ul = document.getElementById('path-list');
+    ul.innerHTML = '';
+    data.steps.forEach(s => {
+      const li = document.createElement('li');
+      li.innerHTML = `<strong>${s.step_order}. ${s.technique_id}</strong><span class="tactic-tag">${s.tactic}</span><br>
+        <span style="color:#a0aec0;font-size:0.75rem;">${String(s.first_seen||'').slice(0,19)} → ${String(s.last_seen||'').slice(0,19)}</span><br>
+        <span style="color:#718096;">${(s.hosts||[]).join(', ')}</span>`;
+      ul.appendChild(li);
+    });
+    status('');
+  } catch(e) { status('Path: ' + e.message, '#fc8181'); }
+}
+
+async function loadReach() {
+  if (!currentIncidentId) return;
+  status('Loading reach…', '#a0aec0');
+  try {
+    const data = await api(`/incidents/${currentIncidentId}/reach`);
+    const el = document.getElementById('reach-list');
+    if (!data.reachable.length) { el.innerHTML = '<div style="color:#718096;">No reachable entities found.</div>'; return; }
+    el.innerHTML = data.reachable.map(r => `
+      <div style="background:#2d3748;border-radius:6px;padding:0.6rem;margin-bottom:0.5rem;">
+        <strong>${r.entity}</strong> <span style="color:#718096;">(${r.entity_kind})</span>
+        ${r.technique_id ? `<br><span style="color:#fc8181;">${r.technique_id}</span>` : ''}
+        ${r.tactic ? `<span class="tactic-tag">${r.tactic}</span>` : ''}
+        ${r.recommendation ? `<br><span style="color:#a0aec0;font-size:0.75rem;">💡 ${r.recommendation}</span>` : ''}
+      </div>
+    `).join('');
+    status('');
+  } catch(e) { status('Reach: ' + e.message, '#fc8181'); }
+}
+
+async function triggerAnalyse() {
+  status('Starting analysis…', '#a0aec0');
+  try {
+    const j = await apiPost('/jobs/analyse');
+    status(`Job ${j.job_id} queued`, '#68d391');
+    setTimeout(loadIncidents, 3000);
+  } catch(e) { status('Analyse error: ' + e.message, '#fc8181'); }
+}
+
+function showIngestModal() {
+  const paths = prompt('Enter log file path(s), comma-separated:');
+  if (!paths) return;
+  const pathList = paths.split(',').map(p => p.trim()).filter(Boolean);
+  apiPost('/jobs/ingest', { paths: pathList })
+    .then(j => { status(`Ingest job ${j.job_id} queued`, '#68d391'); setTimeout(loadStats, 5000); })
+    .catch(e => status('Ingest error: ' + e.message, '#fc8181'));
+}
+
+// Initialise
+loadIncidents();
+</script>
+</body>
+</html>
+

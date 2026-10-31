@@ -1,0 +1,64 @@
+"""Jobs CRUD and trigger endpoints."""
+
+from __future__ import annotations
+
+from fastapi import APIRouter, HTTPException, Query
+
+from app.config import settings
+from app.pipeline.orchestrator import start_analyse_job, start_ingest_job
+from app.schemas.job import Job, JobList
+from app.store import duck
+
+router = APIRouter(prefix="/jobs", tags=["jobs"])
+
+
+def _row_to_job(row: dict) -> Job:
+    import json
+
+    return Job(
+        job_id=row["job_id"],
+        kind=row["kind"],
+        status=row["status"],
+        params=json.loads(row["params"]) if isinstance(row["params"], str) else row["params"],
+        created_at=row["created_at"],
+        started_at=row.get("started_at"),
+        finished_at=row.get("finished_at"),
+        progress_pct=row.get("progress_pct"),
+        error=row.get("error"),
+        result=json.loads(row["result"]) if row.get("result") and isinstance(row["result"], str) else row.get("result"),
+    )
+
+
+@router.get("", response_model=JobList, summary="List all pipeline jobs")
+def list_jobs(
+    offset: int = Query(0, ge=0),
+    limit: int = Query(50, ge=1, le=200),
+) -> JobList:
+    total, rows = duck.list_jobs(offset=offset, limit=limit)
+    return JobList(total=total, items=[_row_to_job(r) for r in rows])
+
+
+@router.get("/{job_id}", response_model=Job, summary="Get a job by ID")
+def get_job(job_id: str) -> Job:
+    row = duck.get_job(job_id)
+    if not row:
+        raise HTTPException(status_code=404, detail=f"Job {job_id!r} not found")
+    return _row_to_job(row)
+
+
+@router.post("/ingest", status_code=202, summary="Start a log ingest job")
+def start_ingest(body: dict) -> dict:
+    """Body: {"paths": ["path/to/log1", ...], "chunk_size": 50000}"""
+    paths = body.get("paths", [])
+    if not paths:
+        raise HTTPException(status_code=422, detail="paths must be a non-empty list")
+    chunk_size = int(body.get("chunk_size", settings.ingest_chunk_rows))
+    job_id = start_ingest_job(paths, chunk_size)
+    return {"job_id": job_id, "status": "queued"}
+
+
+@router.post("/analyse", status_code=202, summary="Start detect+link job on ingested data")
+def start_analyse() -> dict:
+    job_id = start_analyse_job()
+    return {"job_id": job_id, "status": "queued"}
+
