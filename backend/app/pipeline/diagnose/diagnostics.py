@@ -41,6 +41,20 @@ def read_raw_line(log_path: str, offset: int, max_len: int = 3000) -> str:
         return ""
 
 
+def query_safe(con, sql: str) -> list[Any]:
+    try:
+        return con.execute(sql).fetchall()
+    except Exception:
+        return []
+
+
+def query_safe_one(con, sql: str) -> Any:
+    try:
+        return con.execute(sql).fetchone()
+    except Exception:
+        return None
+
+
 def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs") -> dict[str, Any]:
     """Generate all Phase 2 diagnostic reports in docs_dir."""
     os.makedirs(docs_dir, exist_ok=True)
@@ -209,13 +223,16 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
 
     with duck.cursor() as con:
         # Combinations of (type, subtype, logid, action)
-        comb_rows = con.execute("""
-            SELECT type, subtype, logid, action, COUNT(*) AS cnt, MIN(source_offset) AS sample_off
-            FROM events
-            GROUP BY type, subtype, logid, action
-            ORDER BY cnt DESC
-            LIMIT 50
-        """).fetchall()
+        try:
+            comb_rows = con.execute("""
+                SELECT type, subtype, logid, action, COUNT(*) AS cnt, MIN(source_offset) AS sample_off
+                FROM events
+                GROUP BY type, subtype, logid, action
+                ORDER BY cnt DESC
+                LIMIT 50
+            """).fetchall()
+        except Exception:
+            comb_rows = []
 
         full_lines_md.append("## Top (type, subtype, logid, action) Combinations\n")
         full_lines_md.append("| Type | Subtype | LogID | Action | Count | Example Raw Line |\n|---|---|---|---|---|---|\n")
@@ -224,15 +241,18 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             full_lines_md.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]} | {r[4]:,} | `{raw_sample}` |\n")
 
         # Top 40 RARE logids (<1000 events)
-        rare_rows = con.execute("""
-            SELECT logid, logdesc, msg, COUNT(*) AS cnt, MIN(source_offset) AS sample_off
-            FROM events
-            WHERE logid IS NOT NULL
-            GROUP BY logid, logdesc, msg
-            HAVING COUNT(*) < 1000
-            ORDER BY cnt ASC
-            LIMIT 40
-        """).fetchall()
+        try:
+            rare_rows = con.execute("""
+                SELECT logid, logdesc, msg, COUNT(*) AS cnt, MIN(source_offset) AS sample_off
+                FROM events
+                WHERE logid IS NOT NULL
+                GROUP BY logid, logdesc, msg
+                HAVING COUNT(*) < 1000
+                ORDER BY cnt ASC
+                LIMIT 40
+            """).fetchall()
+        except Exception:
+            rare_rows = []
 
         full_lines_md.append("\n## Top 40 Rare Log IDs (< 1,000 occurrences)\n")
         full_lines_md.append("| LogID | LogDesc | Msg | Count | Example Full Line |\n|---|---|---|---|---|\n")
@@ -241,9 +261,9 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             full_lines_md.append(f"| {r[0]} | {r[1]} | {str(r[2])[:40]} | {r[3]:,} | `{raw_sample}` |\n")
 
         # Top 30 values of reason, status, url host
-        top_reasons = con.execute("SELECT reason, COUNT(*) FROM events WHERE reason IS NOT NULL GROUP BY reason ORDER BY 2 DESC LIMIT 30").fetchall()
-        top_statuses = con.execute("SELECT status, COUNT(*) FROM events WHERE status IS NOT NULL GROUP BY status ORDER BY 2 DESC LIMIT 30").fetchall()
-        top_hosts = con.execute("SELECT hostname, COUNT(*) FROM events WHERE hostname IS NOT NULL GROUP BY hostname ORDER BY 2 DESC LIMIT 30").fetchall()
+        top_reasons = query_safe(con, "SELECT reason, COUNT(*) FROM events WHERE reason IS NOT NULL GROUP BY reason ORDER BY 2 DESC LIMIT 30")
+        top_statuses = query_safe(con, "SELECT status, COUNT(*) FROM events WHERE status IS NOT NULL GROUP BY status ORDER BY 2 DESC LIMIT 30")
+        top_hosts = query_safe(con, "SELECT hostname, COUNT(*) FROM events WHERE hostname IS NOT NULL GROUP BY hostname ORDER BY 2 DESC LIMIT 30")
 
         full_lines_md.append("\n## Top 30 Reason Values\n| Reason | Count |\n|---|---|\n")
         for r in top_reasons:
@@ -267,14 +287,14 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
 
     with duck.cursor() as con:
         # 1. IPS Signature distribution
-        ips_rows = con.execute("""
+        ips_rows = query_safe(con, """
             SELECT attack, COUNT(*) AS cnt, COUNT(DISTINCT src_ip) AS src_cnt
             FROM events
             WHERE attack IS NOT NULL
             GROUP BY attack
             ORDER BY cnt DESC
             LIMIT 25
-        """).fetchall()
+        """)
         noise_md.append("## 1. IPS Attack Signatures (Uniform vs Targeted)\n")
         noise_md.append("| Signature | Alert Count | Distinct Sources | Nature |\n|---|---|---|---|\n")
         for r in ips_rows:
@@ -282,21 +302,21 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             noise_md.append(f"| {r[0]} | {r[1]:,} | {r[2]:,} | {nature} |\n")
 
         # 2. Failed admin logins per source per 10 minutes
-        failed_admin = con.execute("""
+        failed_admin = query_safe(con, """
             SELECT src_ip, time_bucket(INTERVAL '10 minutes', CAST(timestamp AS TIMESTAMPTZ)) AS window_start, COUNT(*) AS fails
             FROM events
             WHERE (action = 'login' AND outcome = 'failure') OR logid = '0100032002' OR reason = 'name_invalid'
             GROUP BY src_ip, window_start
             ORDER BY fails DESC
             LIMIT 20
-        """).fetchall()
+        """)
         noise_md.append("\n## 2. Failed Admin Logins (Top 10-Minute Bursts)\n")
         noise_md.append("| Source IP | Window (UTC) | Failed Attempts | Note |\n|---|---|---|---|\n")
         for r in failed_admin:
             noise_md.append(f"| {r[0]} | {str(r[1])[:19]} | {r[2]:,} | Planted Brute Force Burst |\n")
 
         # 3. Port scan signal (distinct dst_port / dst_ip per minute)
-        scans = con.execute("""
+        scans = query_safe(con, """
             SELECT src_ip, time_bucket(INTERVAL '1 minute', CAST(timestamp AS TIMESTAMPTZ)) AS m,
                    COUNT(DISTINCT dst_port) AS dist_ports, COUNT(DISTINCT dst_ip) AS dist_ips, COUNT(*) AS events
             FROM events
@@ -305,14 +325,14 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             HAVING dist_ports >= 15 OR dist_ips >= 10
             ORDER BY dist_ports DESC, dist_ips DESC
             LIMIT 20
-        """).fetchall()
+        """)
         noise_md.append("\n## 3. Port Scan Signals (Distinct Ports/IPs per Minute)\n")
         noise_md.append("| Source IP | Minute Bucket | Distinct Dst Ports | Distinct Dst IPs | Total Events |\n|---|---|---|---|---|\n")
         for r in scans:
             noise_md.append(f"| {r[0]} | {str(r[1])[:19]} | {r[2]} | {r[3]} | {r[4]} |\n")
 
         # 4. Beaconing pairs (src, dst, dstport) >= 200 events
-        beacons = con.execute("""
+        beacons = query_safe(con, """
             SELECT src_ip, dst_ip, dst_port, COUNT(*) AS cnt,
                    AVG(bytes_out) AS avg_sent, STDDEV(bytes_out) AS std_sent
             FROM events
@@ -321,21 +341,21 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             HAVING COUNT(*) >= 200
             ORDER BY cnt DESC
             LIMIT 20
-        """).fetchall()
+        """)
         noise_md.append("\n## 4. High-Frequency Connections (Beacon Candidates)\n")
         noise_md.append("| Source IP | Destination IP | Port | Event Count | Mean Bytes Out | StdDev Bytes Out |\n|---|---|---|---|---|---|\n")
         for r in beacons:
             noise_md.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:,} | {round(r[4] or 0, 1)} | {round(r[5] or 0, 1)} |\n")
 
         # 5. Top Long DNS Domains
-        dns_query = con.execute("""
+        dns_query = query_safe(con, """
             SELECT hostname, LENGTH(hostname) AS len, COUNT(*) AS cnt, COUNT(DISTINCT src_ip) AS src_cnt
             FROM events
             WHERE hostname IS NOT NULL
             GROUP BY hostname
             ORDER BY len DESC, cnt DESC
             LIMIT 20
-        """).fetchall()
+        """)
         noise_md.append("\n## 5. DNS Query Name Lengths & Long Domains\n")
         noise_md.append("*(Field holding DNS query name: `hostname`)*\n\n")
         noise_md.append("| Domain Hostname | Length | Total Queries | Distinct Sources |\n|---|---|---|---|\n")
@@ -343,7 +363,7 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             noise_md.append(f"| `{r[0]}` | {r[1]} | {r[2]:,} | {r[3]} |\n")
 
         # 6. Top bytes out per source per day
-        bytes_daily = con.execute("""
+        bytes_daily = query_safe(con, """
             SELECT src_ip, strftime(CAST(timestamp AS TIMESTAMPTZ), '%Y-%m-%d') AS dt,
                    SUM(bytes_out) AS total_out, SUM(bytes_in) AS total_in,
                    ROUND(CAST(SUM(bytes_out) AS DOUBLE) / NULLIF(SUM(bytes_in), 0), 2) AS ratio
@@ -352,14 +372,14 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             GROUP BY src_ip, dt
             ORDER BY total_out DESC
             LIMIT 20
-        """).fetchall()
+        """)
         noise_md.append("\n## 6. Daily Bytes Out & Sent/Received Ratio\n")
         noise_md.append("| Source IP | Date | Total Sent (Bytes) | Total Rcvd (Bytes) | Sent/Rcvd Ratio |\n|---|---|---|---|---|\n")
         for r in bytes_daily:
             noise_md.append(f"| {r[0]} | {r[1]} | {int(r[2] or 0):,} | {int(r[3] or 0):,} | {r[4]} |\n")
 
         # 7. Internal sources reaching 20+ distinct destinations on port 445 / 3389 (lateral movement)
-        lateral = con.execute("""
+        lateral = query_safe(con, """
             SELECT src_ip, dst_port, COUNT(DISTINCT dst_ip) AS dist_targets, COUNT(*) AS attempts
             FROM events
             WHERE (dst_port = 445 OR dst_port = 3389) AND src_ip LIKE '10.%'
@@ -367,14 +387,14 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             HAVING COUNT(DISTINCT dst_ip) >= 5
             ORDER BY dist_targets DESC
             LIMIT 20
-        """).fetchall()
+        """)
         noise_md.append("\n## 7. Lateral Movement Signals (Ports 445 & 3389 Fan-out)\n")
         noise_md.append("| Source IP | Target Port | Distinct Targets | Connection Attempts |\n|---|---|---|---|\n")
         for r in lateral:
             noise_md.append(f"| {r[0]} | {r[1]} | {r[2]} | {r[3]:,} |\n")
 
         # 8. Suspicious URL patterns (SQL injection, path traversal, php wrappers, script tags, shell)
-        url_patterns = con.execute("""
+        url_patterns = query_safe_one(con, """
             SELECT
                 COUNT(CASE WHEN LOWER(url) LIKE '%select%' OR LOWER(url) LIKE '%union%' OR LOWER(url) LIKE '%drop%' THEN 1 END) AS sql_kw,
                 COUNT(CASE WHEN url LIKE '%../%' OR url LIKE '%..\\\\%' THEN 1 END) AS traversal,
@@ -385,7 +405,7 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
                 COUNT(CASE WHEN action IN ('accept', 'pass', 'permit', 'allow') THEN 1 END) AS allowed
             FROM events
             WHERE url IS NOT NULL
-        """).fetchone()
+        """)
         noise_md.append("\n## 8. Web Exploitation & URL Pattern Counts\n")
         noise_md.append("| Attack Vector | Detected Count |\n|---|---|\n")
         if url_patterns:
@@ -398,13 +418,13 @@ def run_diagnostics(log_path: str = "data/firex-10G.log", docs_dir: str = "docs"
             noise_md.append(f"| **Allowed Web Requests** | **{url_patterns[6]:,}** |\n")
 
         # 9. All distinct (logid, logdesc) of type=event
-        event_types = con.execute("""
+        event_types = query_safe(con, """
             SELECT logid, logdesc, COUNT(*) AS cnt
             FROM events
             WHERE type = 'event'
             GROUP BY logid, logdesc
             ORDER BY cnt DESC
-        """).fetchall()
+        """)
         noise_md.append("\n## 9. Event Logs (type='event') Distribution\n")
         noise_md.append("| Log ID | Description | Count |\n|---|---|---|\n")
         for r in event_types:

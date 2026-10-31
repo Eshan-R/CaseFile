@@ -6,11 +6,23 @@ import json
 
 from fastapi import APIRouter, HTTPException
 
-from app.pipeline.evaluate.evaluator import evaluate_incident
+from app.pipeline.evaluate.evaluator import evaluate_incident, evaluate_manifest
 from app.schemas.evaluation import EvaluationRequest, EvaluationResult
 from app.store import duck
 
 router = APIRouter(prefix="/evaluate", tags=["evaluation"])
+
+
+@router.post("/manifest", summary="Score detections against ground-truth manifest")
+def evaluate_against_manifest(body: dict) -> dict:
+    manifest_path = body.get("manifest_path")
+    if not manifest_path:
+        raise HTTPException(status_code=422, detail="manifest_path is required")
+    log_path = body.get("log_path")
+    try:
+        return evaluate_manifest(manifest_path, log_file_path=log_path)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.post("", response_model=EvaluationResult, summary="Score an incident against ground truth")

@@ -72,19 +72,43 @@ CREATE TABLE IF NOT EXISTS jobs (
 
 CREATE TABLE IF NOT EXISTS events (
     event_id      TEXT PRIMARY KEY,
-    ts            TIMESTAMPTZ NOT NULL,
-    host          TEXT NOT NULL,
-    source_file   TEXT NOT NULL,
-    log_format    TEXT NOT NULL,
-    raw           TEXT NOT NULL,
+    ts            TIMESTAMPTZ,
+    timestamp     TEXT,
+    host          TEXT,
+    source_file   TEXT,
+    log_format    TEXT,
+    raw           TEXT,
     user_name     TEXT,
+    user          TEXT,
+    user_raw      TEXT,
     pid           INTEGER,
     ppid          INTEGER,
     process_name  TEXT,
     cmd           TEXT,
     src_ip        TEXT,
     dst_ip        TEXT,
+    src_port      INTEGER,
     dst_port      INTEGER,
+    event_type    TEXT,
+    type          TEXT,
+    subtype       TEXT,
+    logid         TEXT,
+    logdesc       TEXT,
+    msg           TEXT,
+    action        TEXT,
+    outcome       TEXT,
+    reason        TEXT,
+    status        TEXT,
+    bytes_out     BIGINT,
+    bytes_in      BIGINT,
+    url           TEXT,
+    hostname      TEXT,
+    attack        TEXT,
+    attackid      TEXT,
+    severity      TEXT,
+    stream        INTEGER,
+    source_offset BIGINT,
+    extra         TEXT,
     file_path     TEXT,
     technique_id  TEXT,
     tactic        TEXT,
@@ -194,8 +218,15 @@ CREATE TABLE IF NOT EXISTS events (
     src_port      INTEGER,
     dst_port      INTEGER,
     event_type    TEXT,
+    type          TEXT,
+    subtype       TEXT,
+    logid         TEXT,
+    logdesc       TEXT,
+    msg           TEXT,
     action        TEXT,
     outcome       TEXT,
+    reason        TEXT,
+    status        TEXT,
     bytes_out     BIGINT,
     bytes_in      BIGINT,
     url           TEXT,
@@ -255,8 +286,14 @@ def reset_all() -> None:
     ]
     with cursor() as con:
         for t in tables:
-            con.execute(f"DROP TABLE IF EXISTS {t}")
-            con.execute(f"DROP VIEW IF EXISTS {t}")
+            try:
+                con.execute(f"DROP VIEW IF EXISTS {t}")
+            except Exception:
+                pass
+            try:
+                con.execute(f"DROP TABLE IF EXISTS {t}")
+            except Exception:
+                pass
     init_db()
 
 
