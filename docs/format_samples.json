@@ -1,0 +1,81 @@
+{
+  "CSV or key=value": {
+    "sample_lines": [
+      "date=2026-10-23 time=08:48:26 eventtime=1792745306000000000 tz=\"+0530\" devname=\"FGT60FTK00000000\" devid=\"FGT60FTK00000000\" logid=\"1501054600\" type=\"utm\" subtype=\"dns\" level=\"information\" vd=\"root\" ...",
+      "date=2026-10-23 time=08:48:26 eventtime=1792745306282232000 tz=\"+0530\" devname=\"FGT60FTK00000000\" devid=\"FGT60FTK00000000\" logid=\"1501054600\" type=\"utm\" subtype=\"dns\" level=\"information\" vd=\"root\" ...",
+      "date=2026-10-23 time=08:48:26 eventtime=1792745306423348000 tz=\"+0530\" devname=\"FGT60FTK00000000\" devid=\"FGT60FTK00000000\" logid=\"0000000013\" type=\"traffic\" subtype=\"forward\" level=\"notice\" vd=\"roo...",
+      "date=2026-10-23 time=08:48:26 eventtime=1792745306564464000 tz=\"+0530\" devname=\"FGT60FTK00000000\" devid=\"FGT60FTK00000000\" logid=\"0100032002\" type=\"event\" subtype=\"system\" level=\"alert\" vd=\"root\" l...",
+      "date=2026-10-23 time=08:48:26 eventtime=1792745306705580000 tz=\"+0530\" devname=\"FGT60FTK00000000\" devid=\"FGT60FTK00000000\" logid=\"0000000013\" type=\"traffic\" subtype=\"forward\" level=\"notice\" vd=\"roo..."
+    ],
+    "field_names": [
+      "action",
+      "app",
+      "appcat",
+      "apprisk",
+      "attack",
+      "attackid",
+      "catdesc",
+      "date",
+      "devid",
+      "devname",
+      "dstcountry",
+      "dstintf",
+      "dstintfrole",
+      "dstip",
+      "dstport",
+      "duration",
+      "eventtime",
+      "hostname",
+      "level",
+      "logdesc",
+      "logid",
+      "method",
+      "msg",
+      "policyid",
+      "proto",
+      "rcvdbyte",
+      "rcvdpkt",
+      "reason",
+      "sentbyte",
+      "sentpkt",
+      "service",
+      "sessionid",
+      "severity",
+      "srccountry",
+      "srcintf",
+      "srcintfrole",
+      "srcip",
+      "srcport",
+      "status",
+      "subtype",
+      "time",
+      "type",
+      "tz",
+      "ui",
+      "url",
+      "user",
+      "vd",
+      "virus"
+    ],
+    "timestamp_field": "eventtime / date+time",
+    "timestamp_format": "epoch_ns",
+    "timestamp_examples": [
+      "1792745306000000000",
+      "1792745306282232000",
+      "1792745306423348000"
+    ]
+  },
+  "other": {
+    "sample_lines": [
+      "\u572dx\ufffd\ufffd\ufffd3\ufffd\\x04\ufffdw|\ufffd\ufffd}\ufffd@)\ufffd('\ufffd\ufffd5\ufffd\ufffd\ufffd\ufffd\ufffd`\ufffd0\ufffd\ufffd\ufffd\"SK\ufffd\ufffdM\\x02@'p\\x1c\ufffd\ufffd>\ufffd\ufffdy[P\ufffd[ W\ufffd>\ufffd\ufffd\ufffd\u0785\ufffd|\ufffd\\x0f\ufffd\\x03dv\ufffdF\\x1c\ufffd\ufffd-i\ufffd\ufffdG\ufffdo\ufffd!\ufffd\\x558\ufffd\\x14\ufffd\ufffd\ufffd\ufffd\ufffdf\ufffde\ufffdV\ufffdZ\ufffde\ufffd^Z.W9\ufffd\ufffd\ufffd\\x1e\\x00\ufffd\u01a0\\x07\ufffd\u0510l\ufffd\ufffd\ufffd\ufffdt\ufffd\ufffd\\x07\ufffdg+x\ufffd\ufffd&2U\\x1440\ufffd\ufffd\ufffd\ufffdy\\x19\ufffd\ufffd\\x1aw\ufffd...",
+      "\ufffd\ufffdxe\\x15\ufffd\"\ufffd^r\\x0eI\\x04x\ufffdo\ufffd\\x17v\ufffd\"\\x05\ufffd\ufffd'\ufffd\\x0bR\ufffd\ufffd,\ufffdu<\u0113\ufffd\ufffdI\ufffd\\x022\ufffdS\\x0c\ufffd\ufffd\u05e0\ufffd\ufffd\\x0b\ufffdO\ufffdo\ufffd!wG\\x03\ufffd\ufffd?\\x7f\ufffdHt\ufffd\ufffdk\ufffdF\ufffd,T\ufffd\ufffd\\x0by\\x13\"\ufffd\\x04p^\\x0f\ufffd)\ufffd\u819c\\x19\ufffd\ufffd <\ufffd\ufffd\\x1ft)\ufffd\ufffdG\ufffd?\ufffd\ufffdg\ufffd\ufffd,3\ufffdl\ufffd\\x0c\ufffd\ufffd\ufffd/\\x10\ufffd\ufffd\ufffd7m\\x07\ufffd\ufffd\ufffd\ufffd\ufffdGn\ufffd\\x0...",
+      "\ufffd\\x1c\ufffdQ\ufffd8om72\ufffd8*\\x0b<\\x08g\ufffd9 \u0544aS\ufffdmrD\ufffd\ufffd\ufffd\ufffd\\x1b\ufffd\\x08\ufffd\ufffd\\x0d\ufffd\\x05\ufffd\ufffd\ufffd\ufffd8W\ufffd\ufffd\u0625X\ufffdE\ufffdV\ufffd\\x11\ufffdPY\ufffd\ufffd\ufffdfu\ufffd\ufffd#\\x0d\ufffd\\x06z\ufffdo\ufffd\ufffdV\ufffd\ufffdf\ufffd\\x18\ufffd\\x0b\\x01%\\x01\ufffd\ufffd5\ufffd\ufffd\ufffd\ufffd\\x06m\ufffd\ufffdY-&Y\ufffd\ufffd>a`\ufffdxT\ufffd~\ufffdYG \\x14\\x03\ufffd^%\ufffd~!\ufffd\ufffd\ufffdy\ufffd( cbi^\ufffd\ufffd\ufffd2\ufffd\\x1e\ufffd\ufffd\ufffd\ufffd...",
+      "\ufffdz\ufffdV\ufffd.\ufffdy]s\\x10l\u075f\ufffdmM)p\\x08(\ufffd\ufffd.AJN\ufffd}\\x07{Q\ufffd4x\\x02\ufffd\ufffd\\x1f\\x14y/\ufffd\\x13R\ufffd#W\ufffd\ufffd0\ufffd\ufffd\"2\ufffd\ufffd)\\x14\ufffd%\\x12\ufffd\t<\ufffdO\\x1e\ufffd\\x0e}\\x10h&\ufffdw!\ufffdxq",
+      "\ufffdw/\u04bc\ufffd\\x1bH\ufffd+\ufffd,J^'\u0330\\x00\u0693\ufffd\ufffd\ufffdle\\x0f\ufffd\\x1fd\ufffd\ufffdo>\ufffd\\x11\ufffd\ufffd\ufffd\ufffd\ufffd?\ufffd\tQI%\u0790\ufffd\ufffd\ufffdL\ufffda"
+    ],
+    "field_names": [],
+    "timestamp_field": "none",
+    "timestamp_format": "string",
+    "timestamp_examples": []
+  }
+}

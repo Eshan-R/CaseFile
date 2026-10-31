@@ -30,32 +30,38 @@ cp .env.example .env
 # 4. Create data directory
 mkdir data
 
-# 5. Run the server
-cd backend
-uvicorn app.main:app --reload --port 8000
+# 5. Run the server (from repo root)
+uvicorn app.main:app --app-dir backend --reload --port 8000
 
 # 6. Open the UI
 start http://localhost:8000      # Windows
 open  http://localhost:8000      # macOS
 ```
 
+## Data
+
+- **Firewall stream**: FortiGate key=value log (`firewall_kv` format).
+- **Ground-truth manifest**: `*.manifest.json` is used by the evaluator only (never touched by ingest, detect, link, path, or reporting).
+
 ## CLI Usage
+
+Run CLI commands from the repository root (`rules/`, `knowledge/`, and `./data` are relative to the repo root):
 
 ```bash
 # Ingest log files
-python -m app.cli ingest /path/to/auth.log /path/to/syslog.json
+PYTHONPATH=backend python -m app.cli ingest /path/to/firex-10G.log
 
 # Run detection + incident linking
-python -m app.cli analyse
+PYTHONPATH=backend python -m app.cli analyse
 
 # List incidents
-python -m app.cli incidents
+PYTHONPATH=backend python -m app.cli incidents
 
 # Show statistics
-python -m app.cli stats
+PYTHONPATH=backend python -m app.cli stats
 
 # Reset database
-python -m app.cli reset
+PYTHONPATH=backend python -m app.cli reset
 ```
 
 ## Makefile Targets

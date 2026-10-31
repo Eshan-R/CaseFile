@@ -44,10 +44,10 @@ def main():
 
         if args.incident_id:
             iid = args.incident_id
-            bench(client, f"/api/v1/incidents/{iid}", label=f"GET incident")
-            bench(client, f"/api/v1/incidents/{iid}/graph", label=f"GET graph")
-            bench(client, f"/api/v1/incidents/{iid}/path", label=f"GET path")
-            bench(client, f"/api/v1/incidents/{iid}/reach", label=f"GET reach")
+            bench(client, f"/api/v1/incidents/{iid}", label="GET incident")
+            bench(client, f"/api/v1/incidents/{iid}/graph", label="GET graph")
+            bench(client, f"/api/v1/incidents/{iid}/path", label="GET path")
+            bench(client, f"/api/v1/incidents/{iid}/reach", label="GET reach")
 
 
 if __name__ == "__main__":

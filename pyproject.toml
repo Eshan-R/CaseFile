@@ -30,6 +30,7 @@ casefile = "app.cli:app"
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+exclude = ["scripts/edr_log_generator.py"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP"]
