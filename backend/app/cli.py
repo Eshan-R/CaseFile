@@ -89,6 +89,22 @@ def incidents() -> None:
 
 
 @app.command()
+def diagnose(
+    path: Path = typer.Argument(Path("data/firex-10G.log"), help="Log file path to diagnose"),
+    docs_dir: Path = typer.Option(Path("docs"), "--docs-dir", help="Directory to write markdown reports"),
+) -> None:
+    """Analyze ingested Parquet data and generate integrity, examples, and noise reports."""
+    from app.pipeline.diagnose.diagnostics import run_diagnostics
+
+    console.print(f"Running diagnostics on {path}...")
+    res = run_diagnostics(log_path=str(path), docs_dir=str(docs_dir))
+    console.print(f"[green]Integrity report:[/green] {res['integrity_report']}")
+    console.print(f"[green]Full line examples:[/green] {res['full_line_examples']}")
+    console.print(f"[green]Noise profile:[/green] {res['noise_profile']}")
+    console.print(f"[green]Wall-clock offset:[/green] {res['time_offset_seconds']}s")
+
+
+@app.command()
 def reset() -> None:
     """Drop and recreate all database tables."""
     from app.store.duck import reset_all

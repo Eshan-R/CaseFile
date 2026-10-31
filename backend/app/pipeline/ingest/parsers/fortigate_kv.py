@@ -137,19 +137,8 @@ def determine_outcome(kv: dict[str, str]) -> str:
     return action or "unknown"
 
 
-def parse_line(
-    line: str,
-    source_file: str,
-    source_offset: int,
-    stream: int = 0,
-) -> dict[str, Any] | None:
-    """Parse one FortiGate log line into a normalized dictionary.
-    
-    Returns None if line lacks 'date=' or 'logid=', marking it malformed.
-    """
-    if "date=" not in line or "logid=" not in line:
-        return None
-
+def parse_kv(line: str) -> dict[str, str]:
+    """Single-pass tokenizer for FortiGate key=value pairs."""
     i = 0
     n = len(line)
     kv: dict[str, str] = {}
@@ -204,6 +193,23 @@ def parse_line(
                 i = delim + 1
 
         kv[key] = val
+    return kv
+
+
+def parse_line(
+    line: str,
+    source_file: str,
+    source_offset: int,
+    stream: int = 0,
+) -> dict[str, Any] | None:
+    """Parse one FortiGate log line into a normalized dictionary.
+    
+    Returns None if line lacks 'date=' or 'logid=', marking it malformed.
+    """
+    if "date=" not in line or "logid=" not in line:
+        return None
+
+    kv = parse_kv(line)
 
     date_val = kv.get("date")
     time_val = kv.get("time")
