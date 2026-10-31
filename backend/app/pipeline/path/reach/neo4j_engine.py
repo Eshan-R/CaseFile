@@ -1,17 +1,32 @@
-"""Neo4j reach engine stub (optional).
-
-Replace `_AVAILABLE = False` with `True` and fill in the connection
-once Neo4j is running.
-"""
+"""Neo4j reach engine stub (scheduled for Phase 11)."""
 
 from __future__ import annotations
 
-_AVAILABLE = False
+from typing import Any
+
+from app.pipeline.path.reach.base import NotConfigured, ReachEngine
+from app.schemas.reach import NextReach
 
 
-def compute_reach(incident_id: str) -> dict | None:  # pragma: no cover
-    """Return None when Neo4j is not configured; the route falls back to NetworkX."""
-    if not _AVAILABLE:
-        return None
-    raise NotImplementedError("Neo4j engine not yet wired up.")
+class Neo4jEngine(ReachEngine):
+    """Stub engine for Neo4j graph queries.
 
+    Raises a clear NotConfigured error until Phase 11.
+    """
+
+    name: str = "neo4j"
+
+    def compute(
+        self,
+        incident: dict[str, Any],
+        access_edges: list[dict[str, Any]],
+        config: dict[str, Any] | None = None,
+    ) -> NextReach:
+        raise NotConfigured(
+            "Neo4j reach engine is not configured. Neo4j support is scheduled for Phase 11."
+        )
+
+
+def compute_reach(incident_id: str) -> dict[str, Any] | None:
+    """Legacy helper: returns None so callers fall back to NetworkX."""
+    return None

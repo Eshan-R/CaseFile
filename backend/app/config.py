@@ -34,6 +34,9 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = ""
 
+    # Reach engine
+    reach_engine: str = "networkx"
+
 
 settings = Settings()
 

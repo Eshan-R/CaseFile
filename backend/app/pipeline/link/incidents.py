@@ -113,6 +113,11 @@ def build_incidents() -> dict[str, Any]:
             duck.link_incident_events(inc_id, eids)
 
         duck.upsert_incident(inc)
+        try:
+            from app.pipeline.path.reach.service import precompute_reach_for_incident
+            precompute_reach_for_incident(inc_id)
+        except Exception:
+            pass
         incidents_created += 1
 
     return {"incidents_created": incidents_created}

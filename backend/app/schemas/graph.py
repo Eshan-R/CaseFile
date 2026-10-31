@@ -43,3 +43,27 @@ class ReachResponse(BaseModel):
     seed_hosts: list[str]
     reachable: list[ReachNode] = Field(default_factory=list)
 
+
+# Re-export NextReach schemas
+from app.schemas.reach import (  # noqa: E402
+    DEFAULT_DISCLAIMER,
+    BlastRadius,
+    NextReach,
+    PredictedPath,
+    ReachableTarget,
+)
+
+__all__ = [
+    "DEFAULT_DISCLAIMER",
+    "BlastRadius",
+    "GraphEdge",
+    "GraphNode",
+    "IncidentGraph",
+    "NextReach",
+    "PredictedPath",
+    "ReachNode",
+    "ReachResponse",
+    "ReachableTarget",
+]
+
+

@@ -62,6 +62,34 @@ def analyse() -> None:
     inc_result = build_incidents()
     console.print_json(json.dumps(inc_result))
 
+    console.print("Precomputing reach analysis into incident_next…")
+    from app.pipeline.path.reach.service import precompute_all_incidents
+    reach_res = precompute_all_incidents()
+    console.print(f"  Precomputed reach for {reach_res.get('precomputed', 0)} incidents.")
+
+
+@app.command()
+def reach(
+    incident_id: str | None = typer.Option(None, "--incident", "-i", help="Specific incident ID to inspect"),
+    engine: str = typer.Option("networkx", "--engine", "-e", help="Reach engine (networkx, neo4j)"),
+) -> None:
+    """Precompute and inspect predictive attack paths and reachability for incidents."""
+    from app.pipeline.path.reach.service import (
+        precompute_all_incidents,
+        precompute_reach_for_incident,
+    )
+    from app.store.duck import init_db
+
+    init_db()
+    if incident_id:
+        console.print(f"Precomputing reach for incident {incident_id} with engine={engine}...")
+        res = precompute_reach_for_incident(incident_id, engine_name=engine)
+        console.print_json(res.model_dump_json())
+    else:
+        console.print(f"Precomputing reach for all incidents with engine={engine}...")
+        summary = precompute_all_incidents(engine_name=engine)
+        console.print_json(json.dumps(summary))
+
 
 @app.command()
 def incidents() -> None:

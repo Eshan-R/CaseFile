@@ -32,6 +32,18 @@ def _get_conn() -> duckdb.DuckDBPyConnection:
     return _conn
 
 
+def close() -> None:
+    """Close the shared database connection and reset the handle."""
+    global _conn
+    with _lock:
+        if _conn is not None:
+            try:
+                _conn.close()
+            except Exception:
+                pass
+            _conn = None
+
+
 @contextmanager
 def cursor() -> Generator[duckdb.DuckDBPyConnection, None, None]:
     """Yield the shared connection under the process-wide lock."""
@@ -168,6 +180,15 @@ CREATE TABLE IF NOT EXISTS incident_events (
     PRIMARY KEY (incident_id, event_id)
 );
 CREATE INDEX IF NOT EXISTS idx_inc_ev_event ON incident_events(event_id);
+
+CREATE TABLE IF NOT EXISTS incident_next (
+    incident_id         TEXT PRIMARY KEY,
+    blast_radius_hosts  INTEGER NOT NULL DEFAULT 0,
+    blast_radius_users  INTEGER NOT NULL DEFAULT 0,
+    critical_assets     TEXT NOT NULL DEFAULT '[]',
+    data                TEXT NOT NULL DEFAULT '{}',
+    computed_at         TIMESTAMPTZ NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS rules (
     rule_id      TEXT PRIMARY KEY,
@@ -567,6 +588,43 @@ def set_incident_reach(incident_id: str, reach_json: str) -> None:
             "UPDATE incidents SET reach_json=? WHERE incident_id=?",
             [reach_json, incident_id],
         )
+
+
+def get_incident_next(incident_id: str) -> dict | None:
+    with cursor() as con:
+        res = con.execute("SELECT * FROM incident_next WHERE incident_id=?", [incident_id]).fetchone()
+        if not res:
+            return None
+        cols = [d[0] for d in con.description]
+        return dict(zip(cols, res))
+
+
+def set_incident_next(
+    incident_id: str,
+    data: dict,
+    blast_hosts: int = 0,
+    blast_users: int = 0,
+    critical_assets: list[str] | None = None,
+) -> None:
+    critical_json = json.dumps(critical_assets or [])
+    data_json = json.dumps(data) if isinstance(data, dict) else str(data)
+    now = utc_now()
+    with cursor() as con:
+        con.execute(
+            """
+            INSERT OR REPLACE INTO incident_next
+            (incident_id, blast_radius_hosts, blast_radius_users, critical_assets, data, computed_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+            """,
+            [incident_id, blast_hosts, blast_users, critical_json, data_json, now],
+        )
+
+
+def list_incident_next(limit: int = 100) -> list[dict]:
+    with cursor() as con:
+        rows = con.execute("SELECT * FROM incident_next LIMIT ?", [limit]).fetchall()
+        cols = [d[0] for d in con.description]
+        return [dict(zip(cols, r)) for r in rows]
 
 
 # ---------------------------------------------------------------------------

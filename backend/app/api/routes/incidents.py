@@ -12,6 +12,7 @@ from app.pipeline.report.llm_report import add_narrative
 from app.pipeline.report.template import render as render_report
 from app.schemas.graph import IncidentGraph, ReachResponse
 from app.schemas.incident import Incident, IncidentList
+from app.schemas.reach import NextReach
 from app.schemas.report import ReportResponse
 from app.store import duck
 from app.store.duck import utc_now
@@ -97,6 +98,26 @@ def get_reach(incident_id: str) -> ReachResponse:
         seed_hosts=data.get("seed_hosts", []),
         reachable=[ReachNode(**n) for n in data.get("reachable", [])],
     )
+
+
+@router.get("/{incident_id}/next", response_model=NextReach, summary="Precomputed next reach & predicted attack paths")
+def get_incident_next(incident_id: str) -> NextReach:
+    """Return precomputed reach analysis for an incident.
+    
+    Results are strictly precomputed into incident_next; never computed on request.
+    """
+    row = duck.get_incident_next(incident_id)
+    if not row:
+        inc = duck.get_incident(incident_id)
+        if not inc:
+            raise HTTPException(status_code=404, detail=f"Incident {incident_id!r} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Reach analysis not precomputed for incident {incident_id!r}. Results must be precomputed into incident_next.",
+        )
+
+    data = json.loads(row["data"]) if isinstance(row["data"], str) else row["data"]
+    return NextReach(**data)
 
 
 @router.get("/{incident_id}/path", summary="Ordered kill-chain attack path")

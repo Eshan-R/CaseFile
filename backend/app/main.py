@@ -76,6 +76,7 @@ def create_app() -> FastAPI:
     app.include_router(events.router, prefix=prefix)
     app.include_router(detections.router, prefix=prefix)
     app.include_router(incidents.router, prefix=prefix)
+    app.include_router(incidents.router)  # Allow direct /incidents routes
     app.include_router(rules.router, prefix=prefix)
     app.include_router(evaluation.router, prefix=prefix)
 
