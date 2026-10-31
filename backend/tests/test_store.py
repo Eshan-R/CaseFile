@@ -16,6 +16,7 @@ def temp_db(tmp_path, monkeypatch):
     # Override duck_path via settings
     from app.config import settings
     monkeypatch.setattr(settings, "duck_path", db_path)
+    monkeypatch.setattr(settings, "parquet_dir", str(tmp_path / "parquet"))
     # Clear module-level connection
     duck._conn = None
     duck.init_db()

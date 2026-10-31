@@ -102,18 +102,15 @@ def build_incidents() -> dict[str, Any]:
         graph_dict = graph_to_cytoscape(G, inc_id)
         inc["graph_json"] = json.dumps(graph_dict)
 
-        # Tag detections with incident_id
+        # Tag detections with incident_id and link incident events
         for det in grp:
             with duck.cursor() as con:
                 con.execute(
                     "UPDATE detections SET incident_id=? WHERE detection_id=?",
                     [inc_id, det["detection_id"]],
                 )
-            with duck.cursor() as con:
-                con.execute(
-                    "UPDATE events SET incident_id=? WHERE detection_id=?",
-                    [inc_id, det["detection_id"]],
-                )
+            eids = json.loads(det["event_ids"]) if isinstance(det.get("event_ids"), str) else det.get("event_ids", [])
+            duck.link_incident_events(inc_id, eids)
 
         duck.upsert_incident(inc)
         incidents_created += 1

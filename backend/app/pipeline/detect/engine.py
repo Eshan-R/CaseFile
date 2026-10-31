@@ -81,13 +81,13 @@ def run_detection(
                         "ts": event["ts"],
                         "event_ids": [event["event_id"]],
                     })
-                    # Tag the event row
-                    with duck.cursor() as con:
-                        con.execute(
-                            "UPDATE events SET detection_id=?, technique_id=?, tactic=? "
-                            "WHERE event_id=?",
-                            [det_id, rule.technique_id, rule.tactic, event["event_id"]],
-                        )
+                    # Link detection and event in detection_events table
+                    duck.link_detection_events(
+                        det_id,
+                        [event["event_id"]],
+                        technique_id=rule.technique_id,
+                        tactic=rule.tactic,
+                    )
                     total_detections += 1
                     break  # one detection per event (first matching rule wins)
 

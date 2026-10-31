@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, Query
 
-from app.config import settings
 from app.pipeline.orchestrator import start_analyse_job, start_ingest_job
 from app.schemas.job import Job, JobList
 from app.store import duck
@@ -48,12 +47,27 @@ def get_job(job_id: str) -> Job:
 
 @router.post("/ingest", status_code=202, summary="Start a log ingest job")
 def start_ingest(body: dict) -> dict:
-    """Body: {"paths": ["path/to/log1", ...], "chunk_size": 50000}"""
+    """Body: {"paths": ["path/to/log1", ...], "workers": 4, "resume": false, "skip_bad": false, "limit_bytes": 1000000000}"""
     paths = body.get("paths", [])
+    if isinstance(paths, str):
+        paths = [paths]
+    if not paths and "path" in body:
+        paths = [body["path"]]
     if not paths:
         raise HTTPException(status_code=422, detail="paths must be a non-empty list")
-    chunk_size = int(body.get("chunk_size", settings.ingest_chunk_rows))
-    job_id = start_ingest_job(paths, chunk_size)
+    chunk_size = int(body.get("chunk_size", 64 * 1024 * 1024))
+    workers = body.get("workers")
+    resume = bool(body.get("resume", False))
+    skip_bad = bool(body.get("skip_bad", False))
+    limit_bytes = body.get("limit_bytes")
+    job_id = start_ingest_job(
+        paths,
+        chunk_size=chunk_size,
+        workers=workers,
+        resume=resume,
+        skip_bad=skip_bad,
+        limit_bytes=limit_bytes,
+    )
     return {"job_id": job_id, "status": "queued"}
 
 

@@ -14,6 +14,7 @@ def client(tmp_path_factory):
     from app.config import settings
     # Point to temp DB before app loads
     settings.duck_path = db_path
+    settings.parquet_dir = str(tmp / "parquet")
     duck._conn = None
     from app.main import app
     return TestClient(app)

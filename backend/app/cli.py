@@ -16,16 +16,28 @@ console = Console()
 @app.command()
 def ingest(
     paths: list[Path] = typer.Argument(..., help="Log file paths to ingest"),
-    chunk_size: int = typer.Option(50_000, "--chunk-size", "-c", help="Events per batch"),
+    workers: int | None = typer.Option(None, "--workers", "-w", help="Worker processes"),
+    resume: bool = typer.Option(False, "--resume", help="Skip finished chunks via _manifest.json"),
+    skip_bad: bool = typer.Option(False, "--skip-bad", help="Skip binary/corrupted chunks"),
+    limit_bytes: int | None = typer.Option(None, "--limit-bytes", help="Ingest only up to N bytes"),
+    chunk_size: int = typer.Option(64 * 1024 * 1024, "--chunk-size", "-c", help="Bytes per chunk"),
 ) -> None:
-    """Stream log files into DuckDB."""
+    """Stream log files into DuckDB via parallel Parquet chunks."""
     from app.pipeline.ingest.runner import run_ingest
     from app.store.duck import init_db
 
     init_db()
     str_paths = [str(p) for p in paths]
-    console.print(f"Ingesting {len(str_paths)} file(s)…")
-    result = run_ingest("cli", str_paths, chunk_size)
+    console.print(f"Ingesting {len(str_paths)} file(s)...")
+    result = run_ingest(
+        job_id="cli",
+        paths=str_paths,
+        chunk_size=chunk_size,
+        workers=workers,
+        resume=resume,
+        skip_bad=skip_bad,
+        limit_bytes=limit_bytes,
+    )
     console.print_json(json.dumps(result))
 
 

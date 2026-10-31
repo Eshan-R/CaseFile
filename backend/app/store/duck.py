@@ -93,11 +93,6 @@ CREATE TABLE IF NOT EXISTS events (
     incident_id   TEXT
 );
 
-CREATE INDEX IF NOT EXISTS idx_events_ts          ON events(ts);
-CREATE INDEX IF NOT EXISTS idx_events_host        ON events(host);
-CREATE INDEX IF NOT EXISTS idx_events_incident    ON events(incident_id);
-CREATE INDEX IF NOT EXISTS idx_events_detection   ON events(detection_id);
-
 CREATE TABLE IF NOT EXISTS detections (
     detection_id TEXT PRIMARY KEY,
     rule_id      TEXT NOT NULL,
@@ -113,6 +108,15 @@ CREATE TABLE IF NOT EXISTS detections (
 
 CREATE INDEX IF NOT EXISTS idx_det_incident ON detections(incident_id);
 CREATE INDEX IF NOT EXISTS idx_det_ts       ON detections(ts);
+
+CREATE TABLE IF NOT EXISTS detection_events (
+    detection_id TEXT NOT NULL,
+    event_id     TEXT NOT NULL,
+    technique_id TEXT,
+    tactic       TEXT,
+    PRIMARY KEY (detection_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_det_ev_event ON detection_events(event_id);
 
 CREATE TABLE IF NOT EXISTS incidents (
     incident_id  TEXT PRIMARY KEY,
@@ -133,6 +137,13 @@ CREATE TABLE IF NOT EXISTS incidents (
     -- Pre-computed reach JSON
     reach_json   TEXT
 );
+
+CREATE TABLE IF NOT EXISTS incident_events (
+    incident_id  TEXT NOT NULL,
+    event_id     TEXT NOT NULL,
+    PRIMARY KEY (incident_id, event_id)
+);
+CREATE INDEX IF NOT EXISTS idx_inc_ev_event ON incident_events(event_id);
 
 CREATE TABLE IF NOT EXISTS rules (
     rule_id      TEXT PRIMARY KEY,
@@ -162,6 +173,70 @@ CREATE TABLE IF NOT EXISTS stats (
 """
 
 
+CREATE_EVENTS_TABLE_DDL = """\
+CREATE TABLE IF NOT EXISTS events (
+    event_id      TEXT PRIMARY KEY,
+    ts            TIMESTAMPTZ,
+    timestamp     TEXT,
+    host          TEXT,
+    source_file   TEXT,
+    log_format    TEXT,
+    raw           TEXT,
+    user_name     TEXT,
+    user          TEXT,
+    user_raw      TEXT,
+    pid           INTEGER,
+    ppid          INTEGER,
+    process_name  TEXT,
+    cmd           TEXT,
+    src_ip        TEXT,
+    dst_ip        TEXT,
+    src_port      INTEGER,
+    dst_port      INTEGER,
+    event_type    TEXT,
+    action        TEXT,
+    outcome       TEXT,
+    bytes_out     BIGINT,
+    bytes_in      BIGINT,
+    url           TEXT,
+    hostname      TEXT,
+    attack        TEXT,
+    attackid      TEXT,
+    severity      TEXT,
+    stream        INTEGER,
+    source_offset BIGINT,
+    extra         TEXT,
+    file_path     TEXT,
+    technique_id  TEXT,
+    tactic        TEXT,
+    rule_ids      TEXT NOT NULL DEFAULT '[]',
+    detection_id  TEXT,
+    incident_id   TEXT
+);
+"""
+
+
+def ensure_events_view(parquet_dir: str | None = None) -> None:
+    """Create or replace DuckDB events view over Parquet if parquet files exist, else base table."""
+    import glob
+    target_dir = parquet_dir if parquet_dir is not None else settings.parquet_dir
+    parquet_glob = os.path.abspath(os.path.join(target_dir, "stream=*/*/*.parquet")).replace("\\", "/")
+    matches = glob.glob(parquet_glob)
+    with cursor() as con:
+        if matches:
+            try:
+                con.execute("DROP VIEW IF EXISTS events")
+            except Exception:
+                pass
+            try:
+                con.execute("DROP TABLE IF EXISTS events")
+            except Exception:
+                pass
+            con.execute(f"CREATE OR REPLACE VIEW events AS SELECT *, timestamp AS ts FROM read_parquet('{parquet_glob}')")
+        else:
+            con.execute(CREATE_EVENTS_TABLE_DDL)
+
+
 def init_db() -> None:
     """Create all tables (idempotent – CREATE IF NOT EXISTS)."""
     with cursor() as con:
@@ -169,16 +244,19 @@ def init_db() -> None:
             s = stmt.strip()
             if s:
                 con.execute(s)
+    ensure_events_view()
 
 
 def reset_all() -> None:
     """Drop all tables and recreate. Useful for dev resets."""
     tables = [
-        "jobs", "events", "detections", "incidents", "rules", "evaluations", "stats"
+        "jobs", "events", "detections", "detection_events", "incidents",
+        "incident_events", "rules", "evaluations", "stats"
     ]
     with cursor() as con:
         for t in tables:
             con.execute(f"DROP TABLE IF EXISTS {t}")
+            con.execute(f"DROP VIEW IF EXISTS {t}")
     init_db()
 
 
@@ -250,16 +328,23 @@ def insert_events_batch(rows: list[dict]) -> None:
     if not rows:
         return
     keys = [
-        "event_id","ts","host","source_file","log_format","raw",
-        "user_name","pid","ppid","process_name","cmd",
-        "src_ip","dst_ip","dst_port","file_path",
-        "technique_id","tactic","rule_ids","detection_id","incident_id",
+        "event_id", "ts", "host", "source_file", "log_format", "raw",
+        "user_name", "pid", "ppid", "process_name", "cmd",
+        "src_ip", "dst_ip", "dst_port", "file_path",
+        "technique_id", "tactic", "rule_ids", "detection_id", "incident_id",
     ]
-    values = [
-        [r.get(k) if k != "rule_ids" else json.dumps(r.get("rule_ids", []))
-         for k in keys]
-        for r in rows
-    ]
+    values = []
+    for r in rows:
+        vals = []
+        for k in keys:
+            if k == "ts":
+                vals.append(r.get("ts") or r.get("timestamp"))
+            elif k == "rule_ids":
+                vals.append(json.dumps(r.get("rule_ids", [])))
+            else:
+                vals.append(r.get(k))
+        values.append(vals)
+
     placeholders = ",".join(["?"] * len(keys))
     with cursor() as con:
         con.executemany(
@@ -299,16 +384,43 @@ def _build_event_where(
 ) -> tuple[str, list]:
     clauses, params = [], []
     if incident_id:
-        clauses.append("incident_id=?")
-        params.append(incident_id)
+        clauses.append("(incident_id=? OR event_id IN (SELECT event_id FROM incident_events WHERE incident_id=?))")
+        params.extend([incident_id, incident_id])
     if detection_id:
-        clauses.append("detection_id=?")
-        params.append(detection_id)
+        clauses.append("(detection_id=? OR event_id IN (SELECT event_id FROM detection_events WHERE detection_id=?))")
+        params.extend([detection_id, detection_id])
     if host:
         clauses.append("host=?")
         params.append(host)
     where = (" WHERE " + " AND ".join(clauses)) if clauses else ""
     return where, params
+
+
+def link_detection_events(
+    detection_id: str,
+    event_ids: list[str],
+    technique_id: str = "",
+    tactic: str = "",
+) -> None:
+    if not event_ids:
+        return
+    rows = [(detection_id, eid, technique_id, tactic) for eid in event_ids]
+    with cursor() as con:
+        con.executemany(
+            "INSERT OR REPLACE INTO detection_events (detection_id, event_id, technique_id, tactic) VALUES (?, ?, ?, ?)",
+            rows,
+        )
+
+
+def link_incident_events(incident_id: str, event_ids: list[str]) -> None:
+    if not event_ids:
+        return
+    rows = [(incident_id, eid) for eid in event_ids]
+    with cursor() as con:
+        con.executemany(
+            "INSERT OR REPLACE INTO incident_events (incident_id, event_id) VALUES (?, ?)",
+            rows,
+        )
 
 
 def count_events() -> int:

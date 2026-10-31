@@ -28,21 +28,59 @@ def _run_analyse_job(job_id: str) -> None:
         duck.update_job(job_id, status="failed", error=str(exc))
 
 
-def _run_ingest_job(job_id: str, paths: list[str], chunk_size: int) -> None:
+def _run_ingest_job(
+    job_id: str,
+    paths: list[str],
+    chunk_size: int = 64 * 1024 * 1024,
+    workers: int | None = None,
+    resume: bool = False,
+    skip_bad: bool = False,
+    limit_bytes: int | None = None,
+) -> None:
     """Background thread: stream logs into DuckDB."""
     try:
         duck.update_job(job_id, status="running")
-        result = run_ingest(job_id, paths, chunk_size)
+        result = run_ingest(
+            job_id,
+            paths,
+            chunk_size=chunk_size,
+            workers=workers,
+            resume=resume,
+            skip_bad=skip_bad,
+            limit_bytes=limit_bytes,
+        )
         duck.update_job(job_id, status="done", progress_pct=100.0, result=result)
     except Exception as exc:
         duck.update_job(job_id, status="failed", error=str(exc))
 
 
-def start_ingest_job(paths: list[str], chunk_size: int = 50_000) -> str:
+def start_ingest_job(
+    paths: list[str],
+    chunk_size: int = 64 * 1024 * 1024,
+    workers: int | None = None,
+    resume: bool = False,
+    skip_bad: bool = False,
+    limit_bytes: int | None = None,
+) -> str:
     """Create and enqueue an ingest job.  Returns job_id."""
     job_id = duck.new_id("job")
-    duck.insert_job(job_id, "ingest", {"paths": paths, "chunk_size": chunk_size})
-    t = threading.Thread(target=_run_ingest_job, args=(job_id, paths, chunk_size), daemon=True)
+    duck.insert_job(
+        job_id,
+        "ingest",
+        {
+            "paths": paths,
+            "chunk_size": chunk_size,
+            "workers": workers,
+            "resume": resume,
+            "skip_bad": skip_bad,
+            "limit_bytes": limit_bytes,
+        },
+    )
+    t = threading.Thread(
+        target=_run_ingest_job,
+        args=(job_id, paths, chunk_size, workers, resume, skip_bad, limit_bytes),
+        daemon=True,
+    )
     t.start()
     return job_id
 

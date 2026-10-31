@@ -1,0 +1,44 @@
+# FortiGate outcome mapping
+# Keyed on logid, logdesc, status, action, reason
+
+status_map:
+  failed: failure
+  failure: failure
+  success: success
+  successful: success
+  passthrough: allowed
+  timeout: failure
+
+action_map:
+  deny: blocked
+  block: blocked
+  blocked: blocked
+  drop: blocked
+  dropped: blocked
+  reset: blocked
+  reset-both: blocked
+  reset-client: blocked
+  reset-server: blocked
+  client-rst: blocked
+  server-rst: blocked
+  accept: allowed
+  pass: allowed
+  permit: allowed
+  allow: allowed
+  ip-conn: allowed
+  start: allowed
+  dns: allowed
+  login: check_status
+
+reason_map:
+  name_invalid: failure
+  password_invalid: failure
+  auth_failure: failure
+  timeout: failure
+
+logid_map:
+  "0100032002": failure   # Admin login failed
+  "0100032001": success   # Admin login successful
+  "0100032003": failure   # Admin logout
+  "0000000013": allowed   # Traffic forward accept
+  "0000000020": blocked   # Traffic forward deny

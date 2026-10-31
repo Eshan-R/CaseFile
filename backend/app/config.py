@@ -16,6 +16,8 @@ class Settings(BaseSettings):
 
     # DuckDB path (relative to repo root or absolute)
     duck_path: str = "./data/casefile.duckdb"
+    parquet_dir: str = "./data/parquet"
+    manifest_timezone: str = "Asia/Kolkata"
 
     # Ingest limits
     ingest_chunk_rows: int = 50_000
