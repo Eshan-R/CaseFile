@@ -17,6 +17,10 @@ from app.api.routes import (
     health,
     incidents,
     jobs,
+    llm,
+    logs,
+    next_paths,
+    patterns,
     rules,
     stats,
 )
@@ -28,6 +32,9 @@ from app.store.duck import init_db
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
+    import os
+    print(f"[CaseFile Server] Resolved DUCK_PATH   : {os.path.abspath(settings.duck_path)}")
+    print(f"[CaseFile Server] Resolved PARQUET_DIR : {os.path.abspath(settings.parquet_dir)}")
     init_db()
     load_rules()
     yield
@@ -78,7 +85,16 @@ def create_app() -> FastAPI:
     app.include_router(incidents.router, prefix=prefix)
     app.include_router(incidents.router)  # Allow direct /incidents routes
     app.include_router(rules.router, prefix=prefix)
+    app.include_router(rules.router)  # Allow direct /rules routes
+    app.include_router(patterns.router, prefix=f"{prefix}/patterns", tags=["patterns"])
+    app.include_router(patterns.router, prefix="/patterns", tags=["patterns"])
     app.include_router(evaluation.router, prefix=prefix)
+    app.include_router(llm.router, prefix=prefix)
+    app.include_router(llm.router)
+    app.include_router(logs.router, prefix=prefix)
+    app.include_router(logs.router)
+    app.include_router(next_paths.router, prefix=prefix)
+    app.include_router(next_paths.router)
 
     # ----- Static UI -----
     import os

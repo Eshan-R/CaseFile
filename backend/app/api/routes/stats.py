@@ -19,6 +19,7 @@ def get_stats() -> dict:
         "total_events": total_events,
         "total_detections": total_dets,
         "total_incidents": total_incs,
+        "suppressed_population_windows": duck.count_suppressed_windows(),
         "last_ingest_events": duck.get_stat("last_ingest_events"),
         "last_ingest_malformed": duck.get_stat("last_ingest_malformed"),
     }

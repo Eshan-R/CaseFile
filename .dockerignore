@@ -1,0 +1,14 @@
+data/
+.venv/
+.pytest_cache/
+.ruff_cache/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.duckdb*
+.env
+.git/
+.gitignore
+docs/
+

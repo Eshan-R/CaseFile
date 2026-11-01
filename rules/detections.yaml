@@ -1,147 +1,549 @@
-# CaseFile default detection rules
-# Format: list of rule objects
+# CaseFile Production Detection Rules
+# Stored in rules/ and loaded dynamically by rule_loader.py
 
-- rule_id: "CF-001"
-  name: "Suspicious PowerShell Execution"
-  description: "PowerShell launched with encoded command or bypass flags."
-  technique_id: "T1059.001"
-  tactic: "Execution"
-  severity: 7
-  conditions:
-    - field: process_name
+- id: failed-admin-burst
+  name: "Failed Admin Authentication Burst"
+  description: "High-velocity password guessing attacks against administrative interfaces (>= 500 failures in 10 minutes)."
+  type: sql
+  sql_file: rules/sql/failed_admin_burst.sql
+  technique:
+    id: T1110.001
+    name: "Password Spraying / Brute Force"
+  tactic: credential_access
+  kill_chain_stage: "Exploitation"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: slow-credential-stuffing
+  name: "Distributed Slow Credential Stuffing (/24 Subnet)"
+  description: "Low-and-slow credential stuffing rotated across an entire /24 subnet (distinct users >= 50, events <= 200, median inter-arrival 120-480s, daily volume below 95th percentile)."
+  type: sql
+  sql_file: rules/sql/slow_credential_stuffing.sql
+  technique:
+    id: T1110.004
+    name: "Credential Stuffing"
+  tactic: credential_access
+  kill_chain_stage: "Exploitation"
+  severity: high
+  confidence: 0.85
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: login-success-after-failures
+  name: "Login Success Following Credential Access Failures"
+  description: "Successful administrative authentication whose source or /24 had >= 5 failures in previous 60 minutes."
+  type: sql
+  sql_file: rules/sql/login_success_after_failures.sql
+  technique:
+    id: T1078.001
+    name: "Default / Administrative Accounts"
+  tactic: initial_access
+  kill_chain_stage: "Initial Access"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: admin-login-external
+  name: "External Administrative Authentication"
+  description: "Successful administrative login from external IP address (high severity during odd hours before 06:00 local time)."
+  type: sql
+  sql_file: rules/sql/admin_login_external.sql
+  technique:
+    id: T1078.001
+    name: "Default / Administrative Accounts"
+  tactic: initial_access
+  kill_chain_stage: "Initial Access"
+  severity: medium
+  confidence: 0.85
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: vpn-impossible-travel
+  name: "Impossible Geographic Travel via VPN"
+  description: "Simultaneous or near-simultaneous VPN sessions for the same user from distinct countries within 60 minutes."
+  type: sql
+  sql_file: rules/sql/vpn_impossible_travel.sql
+  technique:
+    id: T1078.004
+    name: "Cloud / VPN Accounts"
+  tactic: initial_access
+  kill_chain_stage: "Initial Access"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: config-logging-disabled
+  name: "Security Logging Impairment or Frequent Edits"
+  description: "Security logging disabled in configuration or frequent configuration edits (>= 3 Edits in 6h) by administrator."
+  type: sql
+  sql_file: rules/sql/config_logging_disabled.sql
+  technique:
+    id: T1562.002
+    name: "Disable Windows Event Logging"
+  tactic: defense_evasion
+  kill_chain_stage: "Defense Evasion"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: rogue-admin-account
+  name: "Ephemeral Rogue Administrator Account"
+  description: "Administrator account created and deleted within 60 minutes indicating persistence cover-up."
+  type: sql
+  sql_file: rules/sql/rogue_admin_account.sql
+  technique:
+    id: T1136.001
+    name: "Local Account"
+  tactic: persistence
+  kill_chain_stage: "Persistence"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: virus-detected-not-blocked
+  name: "Malicious File Detected Without Block"
+  description: "Malicious binary or script detected by UTM antivirus that was permitted or not blocked."
+  type: sql
+  sql_file: rules/sql/virus_detected_not_blocked.sql
+  technique:
+    id: T1105
+    name: "Ingress Tool Transfer"
+  tactic: command_and_control
+  kill_chain_stage: "Command and Control"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: port-scan
+  name: "Network Port Enumeration Scan"
+  description: "Scanning of >= 200 distinct ports on a destination within 5 minutes regardless of firewall action."
+  type: sql
+  sql_file: rules/sql/port_scan.sql
+  technique:
+    id: T1046
+    name: "Network Service Discovery"
+  tactic: discovery
+  kill_chain_stage: "Discovery"
+  severity: medium
+  confidence: 0.80
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: lateral-fanout
+  name: "Internal Lateral Service Fanout"
+  description: "Internal lateral connection burst to >= 10 internal hosts on ports 445 or 3389 within an hour."
+  type: sql
+  sql_file: rules/sql/lateral_fanout.sql
+  technique:
+    id: T1021.002
+    name: "SMB/Windows Admin Shares"
+  tactic: lateral_movement
+  kill_chain_stage: "Lateral Movement"
+  severity: high
+  confidence: 0.85
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: dns-tunnel
+  name: "DNS Tunneling and Data Exfiltration"
+  description: "High-volume DNS tunneling queries with long subdomains (>= 32 chars) under registered domain."
+  type: sql
+  sql_file: rules/sql/dns_tunnel.sql
+  technique:
+    id: T1071.004
+    name: "DNS"
+  tactic: exfiltration
+  kill_chain_stage: "Exfiltration"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: beaconing
+  name: "Command and Control Periodic Beaconing"
+  description: "Persistent periodic C2 beaconing with low inter-arrival and sent-byte variance (CV <= 0.15 over >= 6h)."
+  type: sql
+  sql_file: rules/sql/beaconing.sql
+  technique:
+    id: T1071.001
+    name: "Web Protocols"
+  tactic: command_and_control
+  kill_chain_stage: "Command and Control"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: staged-exfil
+  name: "Staged Asymmetric Data Exfiltration"
+  description: "Long-duration high-ratio outbound data transfer (>= 24 hours, sent/rcvd >= 1.5, >= 500 events)."
+  type: sql
+  sql_file: rules/sql/staged_exfil.sql
+  technique:
+    id: T1048.002
+    name: "Exfiltration Over Asymmetric Protocol"
+  tactic: exfiltration
+  kill_chain_stage: "Exfiltration"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: web-payload-sqli
+  name: "Web SQL Injection Attack"
+  description: "Repeated SQL injection payload attempts targeting web services."
+  type: sql
+  sql_file: rules/sql/web_payload_sqli.sql
+  technique:
+    id: T1190
+    name: "Exploit Public-Facing Application"
+  tactic: initial_access
+  kill_chain_stage: "Exploitation"
+  severity: high
+  confidence: 0.85
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: web-payload-xss
+  name: "Web Cross-Site Scripting Attack"
+  description: "Repeated cross-site scripting payload attempts targeting web services."
+  type: sql
+  sql_file: rules/sql/web_payload_xss.sql
+  technique:
+    id: T1189
+    name: "Drive-by Compromise"
+  tactic: execution
+  kill_chain_stage: "Execution"
+  severity: high
+  confidence: 0.85
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: web-payload-traversal
+  name: "Web Path Traversal Attack"
+  description: "Repeated directory traversal and file path manipulation attempts."
+  type: sql
+  sql_file: rules/sql/web_payload_traversal.sql
+  technique:
+    id: T1190
+    name: "Exploit Public-Facing Application"
+  tactic: discovery
+  kill_chain_stage: "Discovery"
+  severity: high
+  confidence: 0.85
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: web-payload-cmdi
+  name: "Web Command Injection Attack"
+  description: "Repeated shell command injection payload attempts targeting web services."
+  type: sql
+  sql_file: rules/sql/web_payload_cmdi.sql
+  technique:
+    id: T1190
+    name: "Exploit Public-Facing Application"
+  tactic: execution
+  kill_chain_stage: "Execution"
+  severity: high
+  confidence: 0.85
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: web-shell-upload-path
+  name: "Web Shell Upload Path Access"
+  description: "Persistent requests (>= 20) to URL paths containing upload indicative of web shell access."
+  type: sql
+  sql_file: rules/sql/web_shell_upload_path.sql
+  technique:
+    id: T1505.003
+    name: "Web Shell"
+  tactic: persistence
+  kill_chain_stage: "Persistence"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: syn-flood
+  name: "SYN Flood Denial of Service"
+  description: "Direct TCP SYN packet flood exceeding 2000 events/min from a single /16 network."
+  type: sql
+  sql_file: rules/sql/syn_flood.sql
+  technique:
+    id: T1498.001
+    name: "Direct Network Flood"
+  tactic: impact
+  kill_chain_stage: "Impact"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: http-flood
+  name: "HTTP Distributed Denial of Service Flood"
+  description: "Distributed HTTP flood exceeding 1000 requests/min across >= 100 sources."
+  type: sql
+  sql_file: rules/sql/http_flood.sql
+  technique:
+    id: T1498.001
+    name: "Direct Network Flood"
+  tactic: impact
+  kill_chain_stage: "Impact"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+- id: dns-amplification
+  name: "DNS Reflection Amplification Flood"
+  description: "Inbound UDP DNS amplification response flood with high average packet size."
+  type: sql
+  sql_file: rules/sql/dns_amplification.sql
+  technique:
+    id: T1498.002
+    name: "Reflection Amplification"
+  tactic: impact
+  kill_chain_stage: "Impact"
+  severity: high
+  confidence: 0.90
+  high_fidelity: true
+  applies_to:
+    - firewall_kv
+
+# EDR & Host Log Rules (do not apply to firewall_kv; skipped to avoid IPS noise)
+- id: account-discovery
+  name: "Account Discovery Activity"
+  description: "Enumeration of local accounts, domain users, or password file reconnaissance."
+  type: match
+  technique:
+    id: T1087
+    name: "Account Discovery"
+  tactic: discovery
+  kill_chain_stage: "Discovery"
+  severity: low
+  confidence: 0.70
+  applies_to:
+    - windows_event
+    - edr
+  where:
+    or:
+      - field: attack
+        op: contains
+        value: "Password.Files.Access"
+      - field: attack
+        op: contains
+        value: "User.Enumeration"
+      - field: cmd
+        op: contains
+        value: "net user"
+      - field: cmd
+        op: contains
+        value: "getent passwd"
+
+- id: credential-dumping-indicators
+  name: "OS Credential Dumping Indicators"
+  description: "Memory dumping of lsass process or access to password and shadow files."
+  type: match
+  technique:
+    id: T1003.001
+    name: "OS Credential Dumping: LSASS Memory"
+  tactic: credential_access
+  kill_chain_stage: "Credential Access"
+  severity: critical
+  confidence: 0.90
+  applies_to:
+    - windows_event
+    - edr
+  where:
+    or:
+      - field: attack
+        op: contains
+        value: "Mimikatz"
+      - field: attack
+        op: contains
+        value: "Password.Files"
+      - field: cmd
+        op: contains
+        value: "lsass"
+      - field: cmd
+        op: contains
+        value: "procdump"
+
+- id: malware-detection
+  name: "Malware Detection"
+  description: "Malicious payload detected by security gateway."
+  type: match
+  technique:
+    id: T1204.002
+    name: "User Execution: Malicious File"
+  tactic: execution
+  kill_chain_stage: "Execution"
+  severity: high
+  confidence: 0.85
+  applies_to:
+    - windows_event
+    - edr
+  where:
+    virus:
+      op: contains
+      value: "JS/Nemucod"
+
+# Retired Legacy Rules (disabled; superseded by comprehensive SQL v2 rules)
+- id: large-outbound-transfer
+  name: "Large Outbound Data Transfer"
+  description: "Exfiltration or large file upload exceeding threshold."
+  type: match
+  technique:
+    id: T1048.002
+    name: "Exfiltration Over Asymmetric Protocol"
+  tactic: exfiltration
+  kill_chain_stage: "Exfiltration"
+  severity: high
+  confidence: 0.85
+  enabled: false
+  superseded_by: staged-exfil
+  applies_to:
+    - firewall_kv
+  where:
+    sentbyte:
+      op: gt
+      value: 8999999
+
+- id: targeted-web-attack
+  name: "Targeted Web Application Attack"
+  description: "Web exploits including SQL injection."
+  type: match
+  technique:
+    id: T1190
+    name: "Exploit Public-Facing Application"
+  tactic: initial_access
+  kill_chain_stage: "Exploitation"
+  severity: high
+  confidence: 0.85
+  enabled: false
+  superseded_by: "web-payload-sqli, web-payload-xss, web-payload-cmdi, web-payload-traversal"
+  applies_to:
+    - firewall_kv
+  where:
+    attack:
+      op: contains
+      value: "HTTP.URI.SQL.Injection"
+
+- id: dns-tunneling
+  name: "DNS Tunneling Query"
+  description: "Suspicious DNS query pattern associated with tunneling."
+  type: match
+  technique:
+    id: T1071.004
+    name: "DNS"
+  tactic: command_and_control
+  kill_chain_stage: "Command and Control"
+  severity: high
+  confidence: 0.85
+  enabled: false
+  superseded_by: dns-tunnel
+  applies_to:
+    - firewall_kv
+  where:
+    hostname:
+      op: contains
+      value: "doqotobitum.com"
+
+- id: remote-logon-between-hosts
+  name: "Remote Logon Between Internal Hosts"
+  description: "Lateral movement via RDP or remote logon."
+  type: match
+  technique:
+    id: T1021.001
+    name: "Remote Desktop Protocol"
+  tactic: lateral_movement
+  kill_chain_stage: "Lateral Movement"
+  severity: medium
+  confidence: 0.80
+  enabled: false
+  superseded_by: lateral-fanout
+  applies_to:
+    - firewall_kv
+  where:
+    dst_port:
       op: eq
-      value: powershell.exe
-    - field: cmd
-      op: contains
-      value: "-EncodedCommand"
-  logic: any
+      value: 3389
 
-- rule_id: "CF-002"
-  name: "Scheduled Task Creation"
-  description: "schtasks.exe used to create a new task."
-  technique_id: "T1053.005"
-  tactic: "Persistence"
-  severity: 6
-  conditions:
-    - field: process_name
-      op: contains
-      value: schtasks
-    - field: cmd
-      op: contains
-      value: /create
-  logic: all
+- id: valid-account-misuse
+  name: "Valid Account External Logon"
+  description: "Authentication via external or administrative credentials."
+  type: match
+  technique:
+    id: T1078.001
+    name: "Default / Administrative Accounts"
+  tactic: initial_access
+  kill_chain_stage: "Initial Access"
+  severity: medium
+  confidence: 0.80
+  enabled: false
+  superseded_by: "admin-login-external, login-success-after-failures"
+  applies_to:
+    - firewall_kv
+  where:
+    and:
+      - field: action
+        op: eq
+        value: "login"
+      - field: status
+        op: eq
+        value: "success"
 
-- rule_id: "CF-003"
-  name: "Credential Dump via LSASS"
-  description: "Access to lsass.exe memory."
-  technique_id: "T1003.001"
-  tactic: "Credential Access"
-  severity: 9
-  conditions:
-    - field: cmd
-      op: contains
-      value: lsass
-  logic: any
-
-- rule_id: "CF-004"
-  name: "Brute Force Authentication"
-  description: "Multiple failed logins from the same source."
-  technique_id: "T1110"
-  tactic: "Credential Access"
-  severity: 6
-  conditions:
-    - field: cmd
-      op: contains
-      value: "Failed password"
-  logic: any
-
-- rule_id: "CF-005"
-  name: "System Discovery via systeminfo"
-  description: "systeminfo or uname executed."
-  technique_id: "T1082"
-  tactic: "Discovery"
-  severity: 3
-  conditions:
-    - field: process_name
-      op: contains
-      value: systeminfo
-    - field: cmd
-      op: contains
-      value: uname
-  logic: any
-
-- rule_id: "CF-006"
-  name: "Remote Desktop Access"
-  description: "Inbound RDP connection (port 3389)."
-  technique_id: "T1021.001"
-  tactic: "Lateral Movement"
-  severity: 5
-  conditions:
-    - field: dst_port
-      op: eq
-      value: "3389"
-  logic: all
-
-- rule_id: "CF-007"
-  name: "Log Clearing"
-  description: "Windows event log or /var/log cleared."
-  technique_id: "T1070"
-  tactic: "Defense Evasion"
-  severity: 8
-  conditions:
-    - field: cmd
-      op: contains
-      value: "Clear-EventLog"
-    - field: cmd
-      op: contains
-      value: "wevtutil cl"
-    - field: cmd
-      op: contains
-      value: "rm -rf /var/log"
-  logic: any
-
-- rule_id: "CF-008"
-  name: "File Transfer Tool Detected"
-  description: "curl, wget, certutil used for downloads."
-  technique_id: "T1105"
-  tactic: "Command and Control"
-  severity: 5
-  conditions:
-    - field: cmd
-      op: contains
-      value: "curl "
-    - field: cmd
-      op: contains
-      value: "wget "
-    - field: cmd
-      op: contains
-      value: certutil
-  logic: any
-
-- rule_id: "CF-009"
-  name: "Privilege Escalation via sudo"
-  description: "sudo usage with high-risk commands."
-  technique_id: "T1078.003"
-  tactic: "Privilege Escalation"
-  severity: 6
-  conditions:
-    - field: cmd
-      op: contains
-      value: "sudo "
-  logic: any
-
-- rule_id: "CF-010"
-  name: "Ransomware File Encryption"
-  description: "Known ransomware extension or encryption tool."
-  technique_id: "T1486"
-  tactic: "Impact"
-  severity: 10
-  conditions:
-    - field: file_path
-      op: contains
-      value: ".encrypted"
-    - field: cmd
-      op: contains
-      value: openssl enc
-  logic: any
-
+- id: brute-force-failed-logins
+  name: "High-Velocity Authentication Failures"
+  description: "High-velocity password guessing attacks (>= 500 failures in 10 minutes)."
+  type: threshold
+  technique:
+    id: T1110.001
+    name: "Password Spraying / Brute Force"
+  tactic: credential_access
+  kill_chain_stage: "Exploitation"
+  severity: high
+  confidence: 0.90
+  enabled: false
+  superseded_by: failed-admin-burst
+  applies_to:
+    - firewall_kv
+  group_by:
+    - src_ip
+  window_seconds: 600
+  min_count: 500
+  where:
+    and:
+      - field: action
+        op: eq
+        value: "login"
+      - field: outcome
+        op: eq
+        value: "failure"

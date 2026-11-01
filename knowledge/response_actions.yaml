@@ -1,0 +1,43 @@
+# Curated catalog of approved cybersecurity response actions
+# Used by Story Generator and Grounding Verifier to constrain LLM recommendations
+
+block_ip:
+  description: "Block network traffic to/from an external or hostile IP address at the perimeter firewall"
+  allowed_target_kinds: ["ip"]
+  template: "iptables -A INPUT -s {target} -j DROP && iptables -A OUTPUT -d {target} -j DROP"
+
+isolate_host:
+  description: "Sever all network connections to the compromised host except for management and EDR telemetry"
+  allowed_target_kinds: ["host"]
+  template: "edr-cli isolate --host {target} --reason 'Incident containment'"
+
+disable_account:
+  description: "Immediately disable a compromised or suspicious user account in Active Directory / IdP"
+  allowed_target_kinds: ["user"]
+  template: "Disable-ADAccount -Identity {target}"
+
+reset_credentials:
+  description: "Force immediate password reset and invalidate current Kerberos/NTLM tickets for the user"
+  allowed_target_kinds: ["user"]
+  template: "Set-ADUser -Identity {target} -ChangePasswordAtLogon $true"
+
+revoke_sessions:
+  description: "Revoke all active OAuth refresh tokens and terminate active interactive sessions"
+  allowed_target_kinds: ["user"]
+  template: "Revoke-MgUserAllRefreshToken -UserId {target}"
+
+sinkhole_dns:
+  description: "Redirect malicious domain or C2 DNS queries to an internal sinkhole IP"
+  allowed_target_kinds: ["domain", "ip"]
+  template: "pihole -b {target}"
+
+enable_enhanced_logging:
+  description: "Enable verbose Sysmon/PowerShell script block logging or packet capture on the target host"
+  allowed_target_kinds: ["host"]
+  template: "Set-SysmonConfig -i sysmon-detailed.xml --host {target}"
+
+revert_config:
+  description: "Rollback unauthorized configuration, firewall policy, or scheduled task changes"
+  allowed_target_kinds: ["host"]
+  template: "git checkout HEAD~1 -- /etc/firewall/rules.conf"
+

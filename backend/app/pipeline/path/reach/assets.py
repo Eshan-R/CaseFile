@@ -100,3 +100,4 @@ def identify_critical_assets(
             critical.add(top_host)
 
     return critical
+

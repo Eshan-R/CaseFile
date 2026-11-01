@@ -1,25 +1,23 @@
 services:
-  api:
+  casefile:
     build: .
+    image: casefile:latest
+    container_name: casefile
     ports:
       - "8000:8000"
     volumes:
+      - ./data:/data
       - ./data:/app/data
       - ./rules:/app/rules
       - ./knowledge:/app/knowledge
-    env_file: .env
+      - ./scripts:/app/scripts
+      - ./docs:/app/docs
+    env_file:
+      - path: .env
+        required: false
+    environment:
+      - PYTHONPATH=/app/backend
 
-  # Optional Neo4j – comment out if not needed
-  # neo4j:
-  #   image: neo4j:5
-  #   ports:
-  #     - "7474:7474"
-  #     - "7687:7687"
-  #   environment:
-  #     - NEO4J_AUTH=neo4j/change-me
-  #   volumes:
-  #     - neo4j_data:/data
-
-# volumes:
-#   neo4j_data:
-
+  api:
+    extends:
+      service: casefile

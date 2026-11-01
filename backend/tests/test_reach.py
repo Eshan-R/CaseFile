@@ -22,6 +22,7 @@ def clean_test_db(tmp_path, monkeypatch):
     """Run tests with an isolated clean DuckDB database."""
     db_path = str(tmp_path / "test_reach.duckdb")
     monkeypatch.setattr("app.config.settings.duck_path", db_path)
+    monkeypatch.setattr("app.config.settings.parquet_dir", str(tmp_path / "empty_parquet"))
     duck.close()
     duck.init_db()
     yield
@@ -278,3 +279,77 @@ def test_edge_cases():
         config={"max_out_edges": 200},
     )
     assert res_huge.blast_radius.hosts_count <= 200
+
+
+def test_reach_from_observed_allowed_traffic():
+    """Verify reach graph is built from observed allowed traffic with port/service reasons."""
+    # 1. Seed events table with allowed traffic and denied traffic
+    with duck.cursor() as con:
+        # Allowed connection: 10.10.10.50 -> 10.10.20.10 on tcp/445 (SMB)
+        for i in range(12):
+            con.execute(f"""
+            INSERT INTO events (event_id, ts, timestamp, src_ip, dst_ip, dst_port, service, action)
+            VALUES ('ev_smb_{i}', '2026-10-25 10:{i:02d}:00Z', '2026-10-25 10:{i:02d}:00Z', '10.10.10.50', '10.10.20.10', 445, 'smb', 'accept')
+            """)
+
+        # Denied connection: 10.10.10.50 -> 10.10.30.99 on tcp/22 (SSH)
+        for i in range(5):
+            con.execute(f"""
+            INSERT INTO events (event_id, ts, timestamp, src_ip, dst_ip, dst_port, service, action)
+            VALUES ('ev_deny_{i}', '2026-10-25 10:{i:02d}:00Z', '2026-10-25 10:{i:02d}:00Z', '10.10.10.50', '10.10.30.99', 22, 'ssh', 'deny')
+            """)
+
+        # User admin logon to DC-01
+        for i in range(3):
+            con.execute(f"""
+            INSERT INTO events (event_id, ts, timestamp, host, user, src_ip, dst_ip, action)
+            VALUES ('ev_adm_{i}', '2026-10-25 10:{i:02d}:00Z', '2026-10-25 10:{i:02d}:00Z', 'DC-01', 'admin', '10.10.10.50', '10.10.20.5', 'login')
+            """)
+
+        # Unrelated allowed connection: 192.168.1.1 -> 192.168.1.2 (outside incident)
+        con.execute("""
+        INSERT INTO events (event_id, ts, timestamp, src_ip, dst_ip, dst_port, service, action)
+        VALUES ('ev_unrel', '2026-10-25 10:00:00Z', '2026-10-25 10:00:00Z', '192.168.1.1', '192.168.1.2', 80, 'http', 'accept')
+        """)
+
+    # 2. Upsert incident
+    incident_id = "inc_traffic_test"
+    duck.upsert_incident({
+        "incident_id": incident_id,
+        "title": "Compromised Workstation",
+        "severity": 4,
+        "first_seen": "2026-10-25T10:00:00Z",
+        "last_seen": "2026-10-25T10:15:00Z",
+        "hosts": ["10.10.10.50"],
+        "users": ["admin"],
+        "src_ips": ["10.10.10.50"],
+        "techniques": [],
+        "steps": [],
+        "detection_ids": [],
+    })
+
+    # 3. Precompute reach
+    t0 = time.perf_counter()
+    res = precompute_reach_for_incident(incident_id)
+    latency_ms = (time.perf_counter() - t0) * 1000.0
+
+    assert latency_ms < 500.0, f"Reach precompute took {latency_ms:.2f}ms (> 500ms)"
+    assert res.incident_id == incident_id
+
+    # 4. Verify reachable targets
+    target_ids = {t.target_id: t for t in res.reachable_targets}
+
+    # 10.10.20.10 should be reachable with reason mentioning allowed on smb/445 seen 12 times
+    assert "10.10.20.10" in target_ids
+    t_smb = target_ids["10.10.20.10"]
+    assert "allowed on smb/445 seen 12 times" in t_smb.reason.lower()
+
+    # 10.10.30.99 should NOT be reachable because traffic was denied
+    assert "10.10.30.99" not in target_ids
+
+    # Unrelated host 192.168.1.2 should NOT be reachable
+    assert "192.168.1.2" not in target_ids
+
+    # DC-01 should be reached and marked critical
+    assert "DC-01" in res.blast_radius.critical_assets_reached
+

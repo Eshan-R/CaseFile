@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=70"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "casefile"
@@ -26,6 +26,9 @@ dev = ["pytest>=8.3", "pytest-asyncio>=0.23", "ruff>=0.6", "httpx"]
 
 [project.scripts]
 casefile = "app.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["backend"]
 
 [tool.ruff]
 line-length = 100

@@ -20,9 +20,54 @@ def evaluate_against_manifest(body: dict) -> dict:
         raise HTTPException(status_code=422, detail="manifest_path is required")
     log_path = body.get("log_path")
     try:
-        return evaluate_manifest(manifest_path, log_file_path=log_path)
+        res = evaluate_manifest(manifest_path, log_file_path=log_path)
+        duck.set_stat("latest_evaluation", json.dumps(res))
+        return res
     except Exception as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get("/latest", summary="Get the latest evaluation metrics (silver or manifest)")
+def get_latest_evaluation() -> dict:
+    import os
+
+    # 1. Check silver evaluation results
+    silver_path = os.path.join(os.getcwd(), "docs", "silver_oracles.json")
+    if os.path.exists(silver_path):
+        try:
+            with open(silver_path, encoding="utf-8") as f:
+                s_data = json.load(f)
+            return {
+                "kind": "silver",
+                "behavior_recall": s_data.get("behavior_recall"),
+                "row_recall": s_data.get("silver_recall"),
+                "precision_proxy": s_data.get("precision_proxy"),
+                "precision_proxy_detection": s_data.get("precision_proxy_detection", s_data.get("precision_proxy")),
+                "precision_proxy_behavior": s_data.get("precision_proxy_behavior"),
+                "exact_label_agreement": s_data.get("label_accuracy_exact"),
+                "family_label_agreement": s_data.get("label_accuracy_family"),
+                "caveat": s_data.get(
+                    "banner",
+                    "SILVER STANDARD: agreement with independent SQL oracles on firex-10G.log. No organizer ground truth exists for this file. Not a measure of true accuracy.",
+                ),
+            }
+        except Exception:
+            pass
+
+    # 2. Check stored manifest evaluation
+    raw = duck.get_stat("latest_evaluation")
+    if raw:
+        try:
+            res = json.loads(raw)
+            return {"kind": "manifest", **res}
+        except Exception:
+            pass
+
+    return {
+        "kind": "none",
+        "message": "No evaluation has been run yet.",
+        "caveat": "No evaluation data available.",
+    }
 
 
 @router.post("", response_model=EvaluationResult, summary="Score an incident against ground truth")
@@ -52,4 +97,3 @@ def get_evaluations(incident_id: str) -> dict:
         result_data = json.loads(r["result_json"]) if isinstance(r["result_json"], str) else r["result_json"]
         results.append({"eval_id": r["eval_id"], "created_at": r["created_at"], **result_data})
     return {"incident_id": incident_id, "total": len(results), "items": results}
-

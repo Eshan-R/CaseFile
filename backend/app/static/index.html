@@ -3,253 +3,2811 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>CaseFile – Security Incident Explorer</title>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/cytoscape/3.29.2/cytoscape.min.js"></script>
+  <title>CaseFile – Security Incident & Attack Path Explorer</title>
+  <!-- Zero-CDN: Strictly local vendored scripts -->
+  <script src="/vendor/cytoscape.min.js"></script>
+  <script src="/vendor/dagre.min.js"></script>
+  <script src="/vendor/cytoscape-dagre.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: system-ui, sans-serif; background: #0f1117; color: #e2e8f0; display: flex; flex-direction: column; height: 100vh; }
-    header { padding: 0.75rem 1.5rem; background: #1e2130; border-bottom: 1px solid #2d3748; display: flex; align-items: center; gap: 1rem; }
-    header h1 { font-size: 1.2rem; font-weight: 700; color: #63b3ed; }
-    header span { font-size: 0.75rem; color: #718096; }
-    #toolbar { padding: 0.5rem 1.5rem; background: #171923; border-bottom: 1px solid #2d3748; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
-    #toolbar button { padding: 0.35rem 0.85rem; border-radius: 4px; border: 1px solid #4a5568; background: #2d3748; color: #e2e8f0; cursor: pointer; font-size: 0.8rem; }
-    #toolbar button:hover { background: #4a5568; }
-    #main { display: flex; flex: 1; overflow: hidden; }
-    #sidebar { width: 300px; min-width: 220px; max-width: 400px; background: #1a1d2e; border-right: 1px solid #2d3748; overflow-y: auto; padding: 1rem; font-size: 0.82rem; }
-    #sidebar h2 { color: #90cdf4; margin-bottom: 0.5rem; font-size: 0.9rem; }
-    .inc-card { background: #2d3748; border-radius: 6px; padding: 0.6rem 0.8rem; margin-bottom: 0.5rem; cursor: pointer; border-left: 3px solid #4a5568; }
-    .inc-card:hover, .inc-card.active { border-left-color: #63b3ed; background: #354060; }
-    .inc-card .title { font-weight: 600; color: #e2e8f0; margin-bottom: 0.2rem; word-break: break-all; font-size: 0.8rem; }
-    .inc-card .meta { color: #718096; font-size: 0.72rem; }
-    .badge { display: inline-block; padding: 0.1rem 0.4rem; border-radius: 3px; font-size: 0.7rem; margin-right: 0.25rem; }
-    .sev-high { background: #c53030; }
-    .sev-med { background: #d69e2e; color: #1a1d2e; }
-    .sev-low { background: #276749; }
-    #graph-area { flex: 1; position: relative; }
-    #cy { width: 100%; height: 100%; }
-    #detail-panel { width: 320px; background: #1a1d2e; border-left: 1px solid #2d3748; overflow-y: auto; padding: 1rem; font-size: 0.82rem; display: none; }
-    #detail-panel.open { display: block; }
-    #detail-panel h2 { color: #90cdf4; margin-bottom: 0.5rem; }
-    #detail-panel pre { background: #0f1117; border-radius: 4px; padding: 0.5rem; font-size: 0.72rem; overflow-x: auto; white-space: pre-wrap; word-break: break-all; }
-    #status-bar { padding: 0.3rem 1rem; background: #171923; border-top: 1px solid #2d3748; font-size: 0.72rem; color: #718096; }
-    .path-timeline { list-style: none; border-left: 2px solid #4a5568; margin-left: 0.5rem; padding-left: 1rem; }
-    .path-timeline li { margin-bottom: 0.75rem; position: relative; }
-    .path-timeline li::before { content: ''; position: absolute; left: -1.35rem; top: 0.35rem; width: 10px; height: 10px; border-radius: 50%; background: #63b3ed; border: 2px solid #1a1d2e; }
-    .tactic-tag { font-size: 0.68rem; background: #2c5282; padding: 0.1rem 0.3rem; border-radius: 3px; margin-left: 0.3rem; }
+    :root {
+      --bg-dark: #0a0d14;
+      --bg-surface: #121622;
+      --bg-card: #181d2d;
+      --border: #262e45;
+      --border-focus: #3b82f6;
+      --text: #e2e8f0;
+      --text-muted: #8b9bb4;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --success: #10b981;
+      --purple: #8b5cf6;
+    }
+    body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg-dark);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Top Bar */
+    header {
+      padding: 0.6rem 1.25rem;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      z-index: 10;
+    }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #60a5fa;
+      letter-spacing: -0.02em;
+    }
+    .incident-picker {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: 1rem;
+    }
+    .select-dropdown {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      padding: 0.35rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.82rem;
+      cursor: pointer;
+      outline: none;
+    }
+    .select-dropdown:focus { border-color: var(--accent); }
+
+    .info-tooltip-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: #1e293b;
+      border: 1px solid #3b82f6;
+      color: #93c5fd;
+      font-size: 0.72rem;
+      cursor: help;
+      font-weight: 700;
+    }
+
+    .header-pills {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      margin-left: auto;
+    }
+    .pill {
+      font-size: 0.72rem;
+      padding: 0.2rem 0.55rem;
+      border-radius: 9999px;
+      font-weight: 600;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.3rem;
+      background: #1e2538;
+      border: 1px solid var(--border);
+      color: var(--text);
+    }
+    .pill-green { color: #34d399; border-color: #059669; }
+    .pill-blue { color: #60a5fa; border-color: #2563eb; }
+    .pill-amber { color: #fbbf24; border-color: #d97706; }
+    .pill-red { color: #f87171; border-color: #dc2626; }
+    .pill-purple { color: #c084fc; border-color: #7e22ce; }
+
+    /* App Workspace Layout */
+    #app-workspace {
+      display: flex;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* Left Graph Area */
+    #graph-pane {
+      flex: 1.15;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-dark);
+      border-right: 1px solid var(--border);
+      position: relative;
+      height: 100%;
+      overflow: hidden;
+    }
+    #graph-toolbar {
+      padding: 0.4rem 1rem;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.6rem;
+      font-size: 0.8rem;
+      flex-wrap: wrap;
+    }
+    .btn {
+      padding: 0.3rem 0.65rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      transition: background 0.15s, border-color 0.15s;
+    }
+    .btn:hover { background: #22293e; border-color: var(--border-focus); }
+    .btn-primary { background: #1d4ed8; border-color: #2563eb; color: #fff; }
+    .btn-primary:hover { background: #2563eb; }
+    .btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+    .graph-error-banner {
+      display: none;
+      background: #450a0a;
+      color: #fca5a5;
+      border-bottom: 1px solid #ef4444;
+      padding: 0.5rem 1rem;
+      font-size: 0.78rem;
+      align-items: center;
+      gap: 0.5rem;
+      z-index: 20;
+    }
+
+    #cy-container {
+      flex: 1 1 52%;
+      min-height: 220px;
+      position: relative;
+      width: 100%;
+      background: #090c14;
+    }
+    #cy {
+      position: absolute;
+      top: 0;
+      bottom: 0;
+      left: 0;
+      right: 0;
+    }
+
+    /* Scrubber Sub-header Toolbar & Counter */
+    #scrubber-status-bar {
+      padding: 0.35rem 1rem;
+      background: #0f1422;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid #1a2238;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      font-size: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    /* Scrubber at bottom of graph */
+    #scrubber-bar {
+      padding: 0.4rem 1rem;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.65rem;
+      font-size: 0.78rem;
+      overflow-x: auto;
+    }
+    .timeline-steps {
+      display: flex;
+      gap: 0.4rem;
+      flex: 1;
+      overflow-x: auto;
+      padding-bottom: 2px;
+    }
+    .step-badge-btn {
+      padding: 0.22rem 0.55rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      white-space: nowrap;
+      transition: all 0.15s ease;
+    }
+    .step-badge-btn:hover {
+      border-color: #60a5fa;
+      color: #e2e8f0;
+    }
+    .step-badge-btn.active {
+      background: #1e3a8a;
+      border-color: #60a5fa;
+      color: #93c5fd;
+      font-weight: 700;
+      box-shadow: 0 0 6px rgba(59, 130, 246, 0.4);
+    }
+
+    /* Graph hover tooltip */
+    .graph-tooltip {
+      position: absolute;
+      background: #101421;
+      border: 1px solid #3b82f6;
+      border-radius: 6px;
+      padding: 0.55rem 0.8rem;
+      font-size: 0.74rem;
+      color: #e2e8f0;
+      box-shadow: 0 4px 20px rgba(0, 0, 0, 0.85);
+      pointer-events: none;
+      z-index: 1000;
+      max-width: 320px;
+      line-height: 1.45;
+    }
+
+    /* Attack Logs Panel */
+    #attack-logs-panel {
+      flex: 1 1 48%;
+      min-height: 200px;
+      max-height: 48%;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-surface);
+      border-top: 1px solid var(--border);
+      overflow: hidden;
+    }
+    .attack-logs-header {
+      padding: 0.45rem 1rem;
+      background: #141a29;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.8rem;
+      flex-wrap: wrap;
+    }
+    .log-filter-chips {
+      display: flex;
+      align-items: center;
+      gap: 0.35rem;
+      flex-wrap: wrap;
+    }
+    .log-filter-chip {
+      padding: 0.2rem 0.55rem;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 9999px;
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .log-filter-chip:hover {
+      border-color: var(--border-focus);
+      color: var(--text);
+    }
+    .log-filter-chip.active {
+      background: #1e3a8a;
+      border-color: #3b82f6;
+      color: #93c5fd;
+    }
+    .log-filter-chip.sev-critical.active { background: #450a0a; border-color: #ef4444; color: #fca5a5; }
+    .log-filter-chip.sev-high.active { background: #431407; border-color: #f97316; color: #fdba74; }
+    .log-filter-chip.sev-medium.active { background: #422006; border-color: #eab308; color: #fde047; }
+    .log-filter-chip.sev-low.active { background: #172554; border-color: #3b82f6; color: #93c5fd; }
+    .log-filter-chip.sev-info.active { background: #1f2937; border-color: #6b7280; color: #d1d5db; }
+
+    .attack-logs-table-wrapper {
+      flex: 1;
+      overflow-y: auto;
+    }
+    .attack-logs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.74rem;
+      text-align: left;
+    }
+    .attack-logs-table th {
+      background: #171d2e;
+      padding: 0.4rem 0.6rem;
+      color: #94a3b8;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 5;
+      font-size: 0.72rem;
+    }
+    .attack-logs-table td {
+      padding: 0.35rem 0.6rem;
+      border-bottom: 1px solid #1c2338;
+    }
+    .attack-logs-table tr.log-row {
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .attack-logs-table tr.log-row:hover {
+      background: #182033;
+    }
+    .attack-logs-pagination {
+      padding: 0.35rem 1rem;
+      background: #141a29;
+      border-top: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    /* Severity badges */
+    .badge-sev {
+      font-size: 0.68rem;
+      font-weight: 700;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      display: inline-block;
+      text-align: center;
+    }
+    .badge-sev-critical { background: #450a0a; color: #fca5a5; border: 1px solid #ef4444; }
+    .badge-sev-high { background: #431407; color: #fdba74; border: 1px solid #f97316; }
+    .badge-sev-medium { background: #422006; color: #fde047; border: 1px solid #eab308; }
+    .badge-sev-low { background: #172554; color: #93c5fd; border: 1px solid #3b82f6; }
+    .badge-sev-info { background: #1f2937; color: #d1d5db; border: 1px solid #6b7280; }
+
+    /* Right Story Area */
+    #story-pane {
+      flex: 0.85;
+      min-width: 420px;
+      max-width: 620px;
+      background: var(--bg-surface);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      padding: 1.25rem;
+      gap: 1.2rem;
+    }
+
+    /* Story Components */
+    .story-header {
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 1rem;
+    }
+    .story-title-row {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .story-headline {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #f1f5f9;
+      line-height: 1.35;
+    }
+    .source-badge {
+      font-size: 0.72rem;
+      font-weight: 700;
+      padding: 0.25rem 0.6rem;
+      border-radius: 6px;
+      letter-spacing: 0.04em;
+      white-space: nowrap;
+      cursor: help;
+    }
+    .badge-gemini {
+      background: #042f2e;
+      color: #5eead4;
+      border: 1px solid #0d9488;
+    }
+    .badge-template {
+      background: #451a03;
+      color: #fde68a;
+      border: 1px solid #d97706;
+    }
+
+    .story-meta-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      font-size: 0.75rem;
+      align-items: center;
+    }
+
+    .story-fallback-banner {
+      display: none;
+      background: #422006;
+      border: 1px solid #eab308;
+      color: #fef08a;
+      border-radius: 6px;
+      padding: 0.45rem 0.75rem;
+      font-size: 0.74rem;
+      line-height: 1.4;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 12px;
+      height: 12px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-radius: 50%;
+      border-top-color: #fff;
+      animation: spin 0.8s linear infinite;
+      vertical-align: middle;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.6rem;
+    }
+    .card-title {
+      font-size: 0.85rem;
+      font-weight: 700;
+      color: #93c5fd;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+    }
+    .card-prose {
+      font-size: 0.83rem;
+      line-height: 1.55;
+      color: #cbd5e1;
+    }
+
+    /* Step Card */
+    .step-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: 0.9rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.55rem;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+    }
+    .step-card:hover, .step-card.selected {
+      border-color: #60a5fa;
+      background: #1e253b;
+    }
+    .step-card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .step-num-pill {
+      font-size: 0.7rem;
+      font-weight: 800;
+      background: #1e3a8a;
+      color: #bfdbfe;
+      padding: 0.15rem 0.5rem;
+      border-radius: 4px;
+    }
+    .step-tech-tag {
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: #1e293b;
+      color: #94a3b8;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      border: 1px solid #334155;
+    }
+    .step-headline {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: #f8fafc;
+    }
+    .step-telemetry {
+      display: flex;
+      gap: 0.8rem;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      border-top: 1px solid #262f49;
+      padding-top: 0.4rem;
+      margin-top: 0.2rem;
+    }
+    .event-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.35rem;
+      margin-top: 0.25rem;
+    }
+    .event-chip {
+      font-size: 0.7rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      background: #162238;
+      color: #38bdf8;
+      border: 1px solid #0284c7;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: background 0.15s;
+    }
+    .event-chip:hover {
+      background: #0284c7;
+      color: #fff;
+    }
+
+    /* Actions */
+    .action-item {
+      background: #141a29;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.75rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+    .action-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+    .action-prio {
+      font-size: 0.7rem;
+      font-weight: 700;
+      padding: 0.1rem 0.4rem;
+      border-radius: 4px;
+    }
+    .prio-1 { background: #7f1d1d; color: #fca5a5; }
+    .prio-2 { background: #78350f; color: #fde68a; }
+    .prio-3 { background: #14532d; color: #86efac; }
+    .cmd-box {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #090c14;
+      border: 1px solid #1f273d;
+      border-radius: 4px;
+      padding: 0.35rem 0.6rem;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.72rem;
+      color: #a5f3fc;
+      overflow-x: auto;
+    }
+    .copy-btn {
+      padding: 0.2rem 0.5rem;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.7rem;
+      white-space: nowrap;
+      margin-left: 0.5rem;
+    }
+    .copy-btn:hover { background: #334155; }
+
+    /* Bottom Evidence Drawer */
+    #evidence-drawer {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 280px;
+      background: #101421;
+      border-top: 2px solid #3b82f6;
+      box-shadow: 0 -8px 24px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      z-index: 50;
+      transform: translateY(100%);
+      transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+    #evidence-drawer.open {
+      transform: translateY(0);
+    }
+    .drawer-header {
+      padding: 0.5rem 1rem;
+      background: #171d2e;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 0.82rem;
+      font-weight: 700;
+      color: #93c5fd;
+    }
+    .drawer-content {
+      flex: 1;
+      overflow: auto;
+      padding: 0.75rem;
+    }
+    .evidence-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.74rem;
+      text-align: left;
+    }
+    .evidence-table th {
+      background: #1a2236;
+      padding: 0.45rem 0.6rem;
+      color: #94a3b8;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+    }
+    .evidence-table td {
+      padding: 0.45rem 0.6rem;
+      border-bottom: 1px solid #1f273d;
+      color: #e2e8f0;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .evidence-table tr:hover { background: #161c2d; }
+
+    /* Toast Notification */
+    #toast {
+      position: fixed;
+      bottom: 1.5rem;
+      right: 1.5rem;
+      background: #1e3a8a;
+      color: #e0f2fe;
+      border: 1px solid #3b82f6;
+      padding: 0.5rem 1rem;
+      border-radius: 6px;
+      font-size: 0.8rem;
+      font-weight: 600;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s ease;
+    }
+    #toast.show { opacity: 1; }
   </style>
 </head>
 <body>
+
 <header>
-  <h1>🛡 CaseFile</h1>
-  <span id="header-stats">Loading…</span>
-  <div style="flex:1"></div>
-  <a href="/api/docs" style="color:#63b3ed;font-size:0.78rem;">API Docs</a>
+  <div class="brand">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>
+    CaseFile
+  </div>
+
+  <div class="incident-picker">
+    <label for="incidentSelect" style="font-size:0.78rem;color:var(--text-muted);font-weight:600;">Incident:</label>
+    <select id="incidentSelect" class="select-dropdown" style="max-width:320px;">
+      <option value="">Loading incidents...</option>
+    </select>
+    <span class="info-tooltip-icon" title="Each incident is a group of linked detections (one attack story). Selecting one loads its graph, story, logs and next paths.">ⓘ</span>
+    <label style="display:flex;align-items:center;gap:0.3rem;font-size:0.75rem;color:var(--text-muted);cursor:pointer;margin-left:0.4rem;">
+      <input type="checkbox" id="showLeadsToggle" onchange="toggleShowLeads(this.checked)">
+      Show Leads
+    </label>
+  </div>
+
+  <div class="nav-tabs" style="display:flex;gap:0.4rem;margin-left:1.5rem;">
+    <button id="tab-graph" class="btn btn-primary" onclick="switchMainTab('graph')">Attack Path Graph</button>
+    <button id="tab-patterns" class="btn" onclick="switchMainTab('patterns')">Discovered Patterns</button>
+  </div>
+
+  <div class="header-pills">
+    <span id="pill-evaluation" class="pill pill-purple" title="silver: agreement with SQL oracles, not accuracy">Evaluator: Loading...</span>
+    <span id="pill-runtime" class="pill pill-blue">DuckDB Engine</span>
+  </div>
 </header>
 
-<div id="toolbar">
-  <button onclick="loadIncidents()">↺ Refresh</button>
-  <button onclick="showIngestModal()">⬆ Ingest</button>
-  <button onclick="triggerAnalyse()">⚡ Analyse</button>
-  <select id="view-select" style="background:#2d3748;color:#e2e8f0;border:1px solid #4a5568;padding:0.3rem 0.5rem;border-radius:4px;font-size:0.8rem;" onchange="switchView()">
-    <option value="graph">Entity Graph</option>
-    <option value="path">Kill Chain Path</option>
-    <option value="reach">Reach Analysis</option>
-  </select>
-  <span id="toolbar-status" style="color:#68d391;font-size:0.78rem;"></span>
+<div id="app-workspace">
+  <!-- Left Graph Area & Attack Logs -->
+  <div id="graph-pane">
+    <div id="graph-toolbar">
+      <button id="btn-fit" class="btn" title="Fit to view">⤢ Fit</button>
+      <button id="btn-relayout" class="btn" title="Dagre Left-to-Right layout">↻ Dagre LR</button>
+      <button id="btn-zoom-in" class="btn" title="Zoom in" onclick="if(cy) cy.zoom(cy.zoom() * 1.2);">+</button>
+      <button id="btn-zoom-out" class="btn" title="Zoom out" onclick="if(cy) cy.zoom(cy.zoom() * 0.8);">-</button>
+      <div style="flex:1"></div>
+      <!-- Graph Node Legend (generated directly from NODE_STYLE) -->
+      <div id="graph-node-legend" style="display:flex;align-items:center;gap:0.65rem;flex-wrap:wrap;"></div>
+    </div>
+
+    <!-- Graph Error Banner -->
+    <div id="graph-error-banner" class="graph-error-banner"></div>
+
+    <div id="cy-container">
+      <div id="cy"></div>
+      <div id="graph-tooltip" class="graph-tooltip" style="display:none;"></div>
+    </div>
+
+    <!-- Scrubber Status & Legend Bar -->
+    <div id="scrubber-status-bar">
+      <div style="display:flex;align-items:center;gap:0.5rem;">
+        <span style="font-weight:700;color:#93c5fd;">Timeline Progression:</span>
+        <span id="scrubber-counter" class="pill pill-amber" style="font-size:0.7rem;font-weight:700;">Loading status...</span>
+      </div>
+      <!-- Timeline State Legend -->
+      <div style="display:flex;align-items:center;gap:0.85rem;font-size:0.72rem;color:var(--text-muted);flex-wrap:wrap;">
+        <span style="display:inline-flex;align-items:center;gap:0.3rem;"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#64748b;"></span> Not seen</span>
+        <span style="display:inline-flex;align-items:center;gap:0.3rem;"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#f59e0b;"></span> Touched</span>
+        <span style="display:inline-flex;align-items:center;gap:0.3rem;"><span style="display:inline-block;width:9px;height:9px;border-radius:2px;background:#ef4444;"></span> Compromised</span>
+        <span style="display:inline-flex;align-items:center;gap:0.3rem;"><span style="display:inline-block;width:10px;height:9px;border-radius:2px;background:#2e1065;border:1px dashed #a855f7;"></span> Predicted</span>
+      </div>
+    </div>
+
+    <!-- Timeline Scrubber -->
+    <div id="scrubber-bar">
+      <button id="btn-reset-scrubber" class="btn" style="font-size:0.7rem;white-space:nowrap;" onclick="highlightStep(0)" title="Restore full default view">↺ Reset View</button>
+      <div id="timelineSteps" class="timeline-steps">
+        <button class="step-badge-btn active" onclick="highlightStep(0)">All Steps</button>
+      </div>
+      <button id="btn-replay" class="btn" style="font-size:0.7rem;white-space:nowrap;">▶ Play Scrubber</button>
+    </div>
+
+    <!-- Attack Logs Panel -->
+    <div id="attack-logs-panel">
+      <div class="attack-logs-header">
+        <div style="display:flex;align-items:center;gap:0.6rem;flex-wrap:wrap;">
+          <span style="font-weight:700;font-size:0.82rem;color:#93c5fd;display:flex;align-items:center;gap:0.4rem;">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+              <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+            </svg>
+            Attack Logs
+          </span>
+          <span id="active-log-filter-tag" class="pill pill-blue" style="display:none;font-size:0.68rem;"></span>
+          <button id="btn-clear-log-filter" class="btn" style="display:none;padding:0.15rem 0.4rem;font-size:0.68rem;" onclick="clearLogStepFilter()">Clear Filter</button>
+        </div>
+
+        <!-- Filter Chips with counts -->
+        <div id="log-filter-chips" class="log-filter-chips">
+          <button class="log-filter-chip active" data-sev="" onclick="setLogSeverityFilter('')">All: <span id="cnt-all">0</span></button>
+          <button class="log-filter-chip sev-critical" data-sev="critical" onclick="setLogSeverityFilter('critical')">Critical: <span id="cnt-critical">0</span></button>
+          <button class="log-filter-chip sev-high" data-sev="high" onclick="setLogSeverityFilter('high')">High: <span id="cnt-high">0</span></button>
+          <button class="log-filter-chip sev-medium" data-sev="medium" onclick="setLogSeverityFilter('medium')">Medium: <span id="cnt-medium">0</span></button>
+          <button class="log-filter-chip sev-low" data-sev="low" onclick="setLogSeverityFilter('low')">Low: <span id="cnt-low">0</span></button>
+          <button class="log-filter-chip sev-info" data-sev="info" onclick="setLogSeverityFilter('info')">Info: <span id="cnt-info">0</span></button>
+        </div>
+      </div>
+
+      <div class="attack-logs-table-wrapper">
+        <table class="attack-logs-table">
+          <thead>
+            <tr>
+              <th style="width:130px;">Time</th>
+              <th style="width:80px;">Severity</th>
+              <th style="width:75px;">Action</th>
+              <th style="width:115px;">Source IP</th>
+              <th style="width:135px;">Destination IP:Port</th>
+              <th>Attack / Rule</th>
+              <th style="width:75px;text-align:center;">Detections</th>
+            </tr>
+          </thead>
+          <tbody id="attack-logs-tbody">
+            <tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-muted);">Select an incident to load attack logs...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="attack-logs-pagination">
+        <span id="attack-logs-page-info" style="font-size:0.72rem;color:var(--text-muted);">Showing 0-0 of 0 logs</span>
+        <div style="display:flex;gap:0.4rem;">
+          <button id="btn-logs-prev" class="btn" style="padding:0.2rem 0.5rem;font-size:0.72rem;" onclick="changeLogsPage(-1)" disabled>◀ Prev</button>
+          <button id="btn-logs-next" class="btn" style="padding:0.2rem 0.5rem;font-size:0.72rem;" onclick="changeLogsPage(1)" disabled>Next ▶</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right Story Panel -->
+  <div id="story-pane">
+    <div class="story-header">
+      <div class="story-title-row">
+        <div id="story-headline" class="story-headline">Loading incident attack story...</div>
+        <div id="story-source-badge" class="source-badge badge-template" title="Attack story source">Template</div>
+      </div>
+
+      <!-- Story Fallback Reason Banner -->
+      <div id="story-fallback-banner" class="story-fallback-banner"></div>
+
+      <div class="story-meta-row">
+        <span id="meta-provider-model" class="pill pill-blue" style="display:none;"></span>
+        <span id="meta-generated-at" class="pill" style="display:none;font-size:0.7rem;color:var(--text-muted);"></span>
+        <span id="meta-severity" class="pill pill-red">Severity: -</span>
+        <span id="meta-risk" class="pill pill-amber">Risk: -</span>
+        <span id="meta-detections" class="pill pill-blue">Detections: -</span>
+        <span id="meta-events" class="pill pill-green">Raw Events: -</span>
+      </div>
+      <div style="display:flex;gap:0.5rem;margin-top:0.4rem;">
+        <button id="btn-regenerate" class="btn btn-primary" style="font-size:0.74rem;">
+          ⚡ Generate AI story
+        </button>
+      </div>
+    </div>
+
+    <!-- Executive Briefing -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
+        Executive Briefing
+      </div>
+      <div id="executive-summary" class="card-prose">Extracting incident telemetry...</div>
+    </div>
+
+    <!-- Attack Path Summary -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+        </svg>
+        Attack Path Reconstruction
+      </div>
+      <div id="attack-path-summary" class="card-prose">Mapping MITRE ATT&CK progression...</div>
+    </div>
+
+    <!-- Reconstructed Kill Chain Steps -->
+    <div id="steps-container" style="display:flex;flex-direction:column;gap:0.75rem;">
+      <!-- Populated dynamically -->
+    </div>
+
+    <!-- Possible Next Paths Card -->
+    <div class="card" id="next-paths-card">
+      <div class="card-title" style="justify-content:space-between;flex-wrap:wrap;gap:0.4rem;">
+        <div style="display:flex;align-items:center;gap:0.4rem;">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+          </svg>
+          Possible Next Paths
+        </div>
+        <span class="pill pill-red" style="font-size:0.68rem;">Predictive Reach</span>
+      </div>
+      <div class="next-paths-disclaimer" style="font-size:0.72rem;color:#fca5a5;background:#450a0a;border:1px solid #ef4444;border-radius:5px;padding:0.4rem 0.6rem;line-height:1.4;">
+        ⚠️ Predicted, not observed &mdash; based on access observed in the logs
+      </div>
+      <div id="next-paths-container" style="display:flex;flex-direction:column;gap:0.6rem;margin-top:0.3rem;">
+        <div style="color:var(--text-muted);font-size:0.78rem;">Loading predicted next paths...</div>
+      </div>
+    </div>
+
+    <!-- Blast Radius & Lateral Reach -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/>
+        </svg>
+        Blast Radius & Predictive Reach
+      </div>
+      <div id="blast-radius-text" class="card-prose">Analyzing lateral exposure topology...</div>
+    </div>
+
+    <!-- Response Recommendations -->
+    <div class="card">
+      <div class="card-title">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        Containment Actions (Clipboard Safe)
+      </div>
+      <div id="actions-container" style="display:flex;flex-direction:column;gap:0.6rem;">
+        <!-- Populated dynamically -->
+      </div>
+    </div>
+  </div>
 </div>
 
-<div id="main">
-  <div id="sidebar">
-    <h2>Incidents <span id="inc-count" style="color:#718096;"></span></h2>
-    <div id="incident-list">Loading…</div>
+<!-- Discovered Patterns Workspace -->
+<div id="patterns-workspace" style="display:none;flex:1;flex-direction:column;padding:1.25rem;overflow-y:auto;background:var(--bg-dark);">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:0.8rem;">
+    <div style="display:flex;align-items:center;gap:0.6rem;">
+      <span style="font-weight:700;font-size:1.05rem;color:#60a5fa;">Unsupervised Pattern Discovery</span>
+      <span id="patterns-count-badge" class="pill pill-blue">0 Patterns</span>
+      <button id="btn-run-discovery" class="btn btn-primary" onclick="runPatternDiscovery()">⚡ Run discovery</button>
+      <span id="discovery-job-status" class="pill pill-amber" style="display:none;"></span>
+    </div>
+    <div style="display:flex;align-items:center;gap:0.5rem;flex-wrap:wrap;">
+      <select id="pattern-kind-filter" class="select-dropdown" onchange="filterPatterns()">
+        <option value="">All Kinds</option>
+        <option value="burst">Burst</option>
+        <option value="rarity">Rarity</option>
+        <option value="novel_edges">Novel Edges</option>
+        <option value="sequence">Sequence</option>
+        <option value="coordinated">Coordinated</option>
+      </select>
+      <select id="pattern-status-filter" class="select-dropdown" onchange="filterPatterns()">
+        <option value="">All Statuses</option>
+        <option value="new">New</option>
+        <option value="approved">Approved</option>
+        <option value="rejected">Rejected</option>
+      </select>
+      <button class="btn" onclick="downloadExport('json')" title="Export patterns as JSON">Export JSON</button>
+      <button class="btn" onclick="downloadExport('yaml')" title="Export patterns as YAML">Export YAML</button>
+      <button class="btn" onclick="downloadExport('iocs')" title="Export indicators as CSV">Export IOCs (CSV)</button>
+    </div>
   </div>
 
-  <div id="graph-area">
-    <div id="cy"></div>
-    <div id="path-view" style="display:none;padding:1rem;overflow-y:auto;height:100%;">
-      <h2 style="color:#90cdf4;margin-bottom:1rem;">Kill Chain Timeline</h2>
-      <ul class="path-timeline" id="path-list"></ul>
-    </div>
-    <div id="reach-view" style="display:none;padding:1rem;overflow-y:auto;height:100%;">
-      <h2 style="color:#90cdf4;margin-bottom:1rem;">Attacker Reach</h2>
-      <div id="reach-list"></div>
-    </div>
-  </div>
-
-  <div id="detail-panel">
-    <h2>Detail</h2>
-    <div id="detail-content"></div>
+  <div class="card" style="padding:0;overflow:hidden;border:1px solid var(--border);">
+    <table class="evidence-table" style="width:100%;">
+      <thead>
+        <tr>
+          <th style="width:70px;">Score</th>
+          <th style="width:110px;">Kind</th>
+          <th style="width:90px;">Status</th>
+          <th>Title</th>
+          <th style="width:80px;">Support</th>
+          <th style="width:180px;">ATT&CK</th>
+          <th>Entities</th>
+          <th style="width:200px;">Actions</th>
+        </tr>
+      </thead>
+      <tbody id="patterns-table-body">
+        <tr>
+          <td colspan="8" style="text-align:center;padding:2rem;color:var(--text-muted);">
+            Loading discovered patterns...
+          </td>
+        </tr>
+      </tbody>
+    </table>
   </div>
 </div>
 
-<div id="status-bar" id="status-bar">Ready.</div>
+<!-- Bottom Evidence Drawer -->
+<div id="evidence-drawer">
+  <div class="drawer-header">
+    <div style="display:flex;align-items:center;gap:0.5rem;">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/>
+        <line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+      </svg>
+      Evidence Telemetry Drawer: <span id="evidence-target-id" style="color:#60a5fa;font-family:monospace;"></span>
+    </div>
+    <button class="btn" onclick="closeEvidenceDrawer()">✕ Close Drawer</button>
+  </div>
+  <div class="drawer-content">
+    <table class="evidence-table">
+      <thead>
+        <tr>
+          <th>Event ID</th>
+          <th>Timestamp</th>
+          <th>Source IP:Port</th>
+          <th>Destination IP:Port</th>
+          <th>Service/Proto</th>
+          <th>Action</th>
+          <th>Log Description / Threat</th>
+        </tr>
+      </thead>
+      <tbody id="evidence-table-body">
+        <tr><td colspan="7" style="text-align:center;color:#64748b;">Click an event chip above to inspect raw evidence telemetry.</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div id="toast">Command copied to clipboard!</div>
 
 <script>
-const API = '/api/v1';
-let currentIncidentId = null;
-let cy = null;
+  // ===========================================================================
+  // SECTION: CONSTANTS & STYLE DRIVERS
+  // ===========================================================================
 
-async function api(path) {
-  const r = await fetch(API + path);
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
+  // Single JS constant NODE_STYLE that drives BOTH Cytoscape stylesheet AND UI legend
+  const NODE_STYLE = {
+    'external_ip': { shape: 'diamond', bg: '#f59e0b', border: '#d97706', label: 'External IP' },
+    'internal_host': { shape: 'round-rectangle', bg: '#3b82f6', border: '#2563eb', label: 'Internal Host' },
+    'critical_asset': { shape: 'octagon', bg: '#ec4899', border: '#db2777', label: 'Critical Asset (DC/DB/Server)' },
+    'user': { shape: 'ellipse', bg: '#10b981', border: '#059669', label: 'User / Account' },
+    'technique_step': { shape: 'hexagon', bg: '#8b5cf6', border: '#7c3aed', label: 'ATT&CK Step' },
+    'predicted_target': { shape: 'round-rectangle', bg: '#2e1065', border: '#a855f7', borderStyle: 'dashed', label: 'Predicted Target' }
+  };
 
-async function apiPost(path, body={}) {
-  const r = await fetch(API + path, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
-  if (!r.ok) throw new Error(await r.text());
-  return r.json();
-}
+  // State globals
+  let cy = null;
+  let currentIncidentId = null;
+  let currentStory = null;
+  let currentGraph = null;
+  let currentIncident = null;
+  let currentDetections = [];
+  let detectionsMap = new Map();
+  let activeStepFilter = 0;
+  let replayTimer = null;
 
-function status(msg, color='#68d391') {
-  document.getElementById('toolbar-status').textContent = msg;
-  document.getElementById('toolbar-status').style.color = color;
-}
+  // Track the first step each node became compromised (for pulse animation)
+  let nodeFirstCompromisedStep = new Map();
+  let previouslyCompromisedNodes = new Set();
 
-async function loadStats() {
-  try {
-    const s = await api('/stats');
-    document.getElementById('header-stats').textContent =
-      `${s.total_events} events · ${s.total_detections} detections · ${s.total_incidents} incidents`;
-  } catch(e) {}
-}
+  // Attack logs state
+  let currentLogsOffset = 0;
+  const currentLogsLimit = 50;
+  let currentLogsSeverity = '';
+  let currentLogStepFilter = null;
+  let currentLogEntityFilter = null;
+  let cachedIncidentLogs = [];
+  let totalIncidentLogs = 0;
 
-async function loadIncidents() {
-  status('Loading…', '#a0aec0');
-  try {
-    const data = await api('/incidents?limit=100');
-    const el = document.getElementById('incident-list');
-    document.getElementById('inc-count').textContent = `(${data.total})`;
-    if (!data.items.length) { el.innerHTML = '<div style="color:#718096;font-size:0.78rem;">No incidents yet.</div>'; return; }
-    el.innerHTML = '';
-    data.items.forEach(inc => {
-      const sev = inc.severity >= 8 ? 'sev-high' : inc.severity >= 5 ? 'sev-med' : 'sev-low';
-      const card = document.createElement('div');
-      card.className = 'inc-card';
-      card.innerHTML = `
-        <div class="title"><span class="badge ${sev}">${inc.severity}</span>${inc.title}</div>
-        <div class="meta">${inc.incident_id} · ${inc.hosts.slice(0,3).join(', ')} · ${String(inc.first_seen).slice(0,19)}</div>
-        <div class="meta" style="margin-top:0.2rem;">${inc.techniques.slice(0,4).join(' → ')}</div>
+  // Pattern discovery job polling
+  let discoveryPollInterval = null;
+
+  function escapeHtml(str) {
+    if (str == null) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  // Generate crisp SVG icons for the legend and tooltips based on shape configuration
+  function getShapeSvg(shape, bg, border, borderStyle) {
+    const strokeDash = borderStyle === 'dashed' ? 'stroke-dasharray="2,2"' : '';
+    if (shape === 'diamond') {
+      return `<svg width="12" height="12" viewBox="0 0 20 20" style="vertical-align:middle;flex-shrink:0;"><polygon points="10 1, 19 10, 10 19, 1 10" fill="${bg}" stroke="${border}" stroke-width="2"/></svg>`;
+    } else if (shape === 'round-rectangle') {
+      return `<svg width="13" height="12" viewBox="0 0 22 18" style="vertical-align:middle;flex-shrink:0;"><rect x="1.5" y="1.5" width="19" height="15" rx="3.5" fill="${bg}" stroke="${border}" stroke-width="2" ${strokeDash}/></svg>`;
+    } else if (shape === 'octagon') {
+      return `<svg width="12" height="12" viewBox="0 0 20 20" style="vertical-align:middle;flex-shrink:0;"><polygon points="6 1, 14 1, 19 6, 19 14, 14 19, 6 19, 1 14, 1 6" fill="${bg}" stroke="${border}" stroke-width="2"/></svg>`;
+    } else if (shape === 'ellipse') {
+      return `<svg width="12" height="12" viewBox="0 0 20 20" style="vertical-align:middle;flex-shrink:0;"><ellipse cx="10" cy="10" rx="9" ry="7" fill="${bg}" stroke="${border}" stroke-width="2"/></svg>`;
+    } else if (shape === 'hexagon') {
+      return `<svg width="12" height="12" viewBox="0 0 20 20" style="vertical-align:middle;flex-shrink:0;"><polygon points="10 1, 19 5.5, 19 14.5, 10 19, 1 14.5, 1 5.5" fill="${bg}" stroke="${border}" stroke-width="2"/></svg>`;
+    }
+    return `<svg width="12" height="12" viewBox="0 0 20 20" style="vertical-align:middle;flex-shrink:0;"><circle cx="10" cy="10" r="8" fill="${bg}" stroke="${border}" stroke-width="2"/></svg>`;
+  }
+
+  // Render the neat UI legend directly generated from NODE_STYLE
+  function renderGraphLegend() {
+    const container = document.getElementById('graph-node-legend');
+    if (!container) return;
+    const legendItemsHtml = Object.entries(NODE_STYLE).map(([key, item]) => {
+      const icon = getShapeSvg(item.shape, item.bg, item.border, item.borderStyle);
+      return `<span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.71rem;color:#cbd5e1;" title="${item.label}">${icon} ${escapeHtml(item.label)}</span>`;
+    }).join('');
+
+    container.innerHTML = `
+      ${legendItemsHtml}
+      <span style="display:inline-flex;align-items:center;gap:0.3rem;font-size:0.71rem;color:#c084fc;" title="Predicted Lateral Reach">
+        <span style="display:inline-block;width:12px;height:0;border-top:2px dashed #a855f7;"></span> Predicted Lateral
+      </span>
+    `;
+  }
+
+  // Build Cytoscape stylesheet directly driven by NODE_STYLE
+  function buildCytoscapeStylesheet() {
+    const stylesheet = [
+      {
+        selector: 'node',
+        style: {
+          'label': 'data(label)',
+          'color': '#f8fafc',
+          'font-size': '10px',
+          'font-weight': 600,
+          'text-valign': 'bottom',
+          'text-margin-y': '6px',
+          'width': '34px',
+          'height': '34px',
+          'border-width': '2px',
+          'border-color': '#475569',
+          'background-color': '#1e293b',
+          'transition-property': 'background-color, border-color, border-width, width, height, opacity',
+          'transition-duration': '0.2s'
+        }
+      }
+    ];
+
+    // Drive node styles directly from NODE_STYLE
+    for (const [key, conf] of Object.entries(NODE_STYLE)) {
+      const cyStyle = {
+        'shape': conf.shape,
+        'background-color': conf.bg,
+        'border-color': conf.border,
+        'border-width': conf.shape === 'octagon' ? '3px' : '2px'
+      };
+      if (conf.borderStyle) {
+        cyStyle['border-style'] = conf.borderStyle;
+      }
+
+      let selector = `node[type = "${key}"], node[kind = "${key}"], node.${key}`;
+      if (key === 'technique_step') {
+        selector += `, node[type = "technique"], node[kind = "technique"]`;
+      } else if (key === 'internal_host') {
+        selector += `, node[kind = "host"], node[kind = "ip"]`;
+      } else if (key === 'predicted_target') {
+        selector += `, node[?ghost], node[ghost = true], node.ghost, node[?is_predicted_target]`;
+      }
+
+      stylesheet.push({ selector, style: cyStyle });
+    }
+
+    // Edges & interactions
+    stylesheet.push(
+      {
+        selector: 'edge',
+        style: {
+          'curve-style': 'bezier',
+          'target-arrow-shape': 'triangle',
+          'line-color': '#475569',
+          'target-arrow-color': '#475569',
+          'width': 2,
+          'arrow-scale': 0.9,
+          'label': 'data(label)',
+          'font-size': '8px',
+          'color': '#94a3b8',
+          'text-rotation': 'autorotate'
+        }
+      },
+      // Horizontal kill chain spine edge
+      {
+        selector: 'edge.spine-edge',
+        style: {
+          'line-color': '#7c3aed',
+          'target-arrow-color': '#7c3aed',
+          'line-style': 'solid',
+          'width': 2.5,
+          'arrow-scale': 1.0,
+          'opacity': 0.85
+        }
+      },
+      // Predicted lateral reach edge requirement: edge[?predicted], edge[label = "predicted_reach"]
+      {
+        selector: 'edge[?predicted], edge[label = "predicted_reach"]',
+        style: {
+          'line-style': 'dashed',
+          'line-color': '#a855f7',
+          'target-arrow-color': '#a855f7',
+          'width': 2.5
+        }
+      },
+      // Highlighting & dimming
+      {
+        selector: '.highlighted',
+        style: {
+          'border-color': '#60a5fa',
+          'border-width': '4px',
+          'line-color': '#60a5fa',
+          'target-arrow-color': '#60a5fa',
+          'z-index': 999
+        }
+      },
+      {
+        selector: '.dimmed',
+        style: {
+          'opacity': 0.22
+        }
+      },
+      // Scrubber device coloring states (computed from incident detections)
+      {
+        selector: 'node.state-not-seen',
+        style: {
+          'background-color': '#64748b',
+          'border-color': '#475569',
+          'opacity': 0.6
+        }
+      },
+      {
+        selector: 'node.state-touched',
+        style: {
+          'background-color': '#f59e0b',
+          'border-color': '#d97706',
+          'opacity': 1.0
+        }
+      },
+      {
+        selector: 'node.state-compromised',
+        style: {
+          'background-color': '#ef4444',
+          'border-color': '#b91c1c',
+          'border-width': '3.5px',
+          'opacity': 1.0
+        }
+      },
+      {
+        selector: 'node.state-predicted-risk',
+        style: {
+          'background-color': '#2e1065',
+          'border-style': 'dashed',
+          'border-color': '#a855f7',
+          'border-width': '2.5px',
+          'opacity': 0.95
+        }
+      }
+    );
+
+    return stylesheet;
+  }
+
+  // Initialize Cytoscape
+  function initCytoscape() {
+    if (typeof cytoscapeDagre !== 'undefined') {
+      cytoscape.use(cytoscapeDagre);
+    }
+
+    cy = cytoscape({
+      container: document.getElementById('cy'),
+      style: buildCytoscapeStylesheet(),
+      layout: { name: 'preset' },
+      userZoomingEnabled: true,
+      userPanningEnabled: true,
+      boxSelectionEnabled: false
+    });
+
+    // Node interactions
+    cy.on('tap', 'node', function(evt) {
+      const node = evt.target;
+      highlightGraphNode(node.id());
+      scrollStoryToEntity(node.id());
+      filterLogsByEntity(node.id());
+    });
+
+    cy.on('mouseover', 'node', function(evt) {
+      showNodeTooltip(evt.target, evt.renderedPosition);
+    });
+
+    cy.on('mouseout', 'node', function() {
+      hideNodeTooltip();
+    });
+
+    // Edge interactions
+    cy.on('mouseover', 'edge', function(evt) {
+      const edge = evt.target;
+      if (edge.data('predicted') || edge.data('label') === 'predicted_reach') {
+        showEdgeTooltip(edge, evt.renderedPosition);
+      }
+    });
+
+    cy.on('mouseout', 'edge', function() {
+      hideEdgeTooltip();
+    });
+
+    cy.on('tap', 'edge', function(evt) {
+      const edge = evt.target;
+      if (edge.data('predicted') || edge.data('label') === 'predicted_reach') {
+        showEdgeTooltip(edge, evt.renderedPosition);
+      } else {
+        hideEdgeTooltip();
+      }
+      const stepOrder = edge.data('step_order');
+      if (stepOrder) {
+        highlightStep(stepOrder);
+        filterLogsByStep(stepOrder);
+      }
+    });
+
+    cy.on('tap', function(evt) {
+      if (evt.target === cy) {
+        hideEdgeTooltip();
+        hideNodeTooltip();
+      }
+    });
+
+    // Automatic re-fit when pane resizes
+    const cyContainer = document.getElementById('cy-container');
+    if (window.ResizeObserver && cyContainer) {
+      const resizeObs = new ResizeObserver(() => {
+        if (cy && cy.nodes().length > 0) {
+          cy.resize();
+          cy.fit(undefined, 30);
+        }
+      });
+      resizeObs.observe(cyContainer);
+    }
+    window.addEventListener('resize', () => {
+      if (cy && cy.nodes().length > 0) {
+        cy.resize();
+        cy.fit(undefined, 30);
+      }
+    });
+  }
+
+  // Node hover tooltip
+  function showNodeTooltip(node, renderedPosition) {
+    const tooltip = document.getElementById('graph-tooltip');
+    if (!tooltip) return;
+    const d = node.data();
+    const typeKey = d.type || d.kind || 'internal_host';
+    const typeConf = NODE_STYLE[typeKey] || { label: typeKey, bg: '#3b82f6', shape: 'round-rectangle', border: '#2563eb' };
+
+    let roleDetails = '';
+    if (typeKey === 'technique_step') {
+      roleDetails = `
+        <div><strong>Step Order:</strong> Step ${escapeHtml(d.step_order || 1)}</div>
+        <div><strong>Tactic:</strong> ${escapeHtml(d.tactic || 'Execution')}</div>
+        ${d.stage ? `<div><strong>Kill Chain Stage:</strong> ${escapeHtml(d.stage)}</div>` : ''}
+        ${d.first_seen ? `<div><strong>First Seen:</strong> ${escapeHtml(d.first_seen)}</div>` : ''}
       `;
-      card.onclick = () => selectIncident(inc.incident_id, card);
-      el.appendChild(card);
-    });
-    status('');
-    await loadStats();
-  } catch(e) { status('Error: ' + e.message, '#fc8181'); }
-}
+    } else if (typeKey === 'internal_host' || typeKey === 'critical_asset') {
+      const isCompromised = node.hasClass('state-compromised');
+      const isTouched = node.hasClass('state-touched');
+      const statusText = isCompromised ? '🔴 Compromised (Severity >= 7 detection)' : (isTouched ? '🟡 Touched in timeline' : '⚪ Not yet seen');
+      roleDetails = `
+        <div><strong>Classification:</strong> ${typeKey === 'critical_asset' ? 'Critical Asset (DC / DB / Server)' : 'Internal Workstation / Host'}</div>
+        <div><strong>Status:</strong> ${statusText}</div>
+        ${d.criticality ? `<div><strong>Asset Criticality:</strong> ${escapeHtml(d.criticality)}</div>` : ''}
+      `;
+    } else if (typeKey === 'user') {
+      const isCompromised = node.hasClass('state-compromised');
+      roleDetails = `
+        <div><strong>Account:</strong> User Identity</div>
+        <div><strong>Status:</strong> ${isCompromised ? '🔴 Compromised Account' : '🟢 Active User Entity'}</div>
+      `;
+    } else if (typeKey === 'external_ip') {
+      roleDetails = `
+        <div><strong>Classification:</strong> External Public IP</div>
+        <div><strong>Role:</strong> Adversary Ingress / C2 Infrastructure</div>
+      `;
+    } else if (typeKey === 'predicted_target') {
+      roleDetails = `
+        <div><strong>Status:</strong> 🟣 Predicted Lateral Target (At Risk)</div>
+        ${d.reason ? `<div><strong>Reach Vector:</strong> ${escapeHtml(d.reason)}</div>` : ''}
+        ${d.priority ? `<div><strong>Priority:</strong> ${escapeHtml(d.priority)}</div>` : ''}
+      `;
+    }
 
-async function selectIncident(id, card) {
-  document.querySelectorAll('.inc-card').forEach(c => c.classList.remove('active'));
-  if (card) card.classList.add('active');
-  currentIncidentId = id;
-  switchView();
-}
-
-function switchView() {
-  const view = document.getElementById('view-select').value;
-  document.getElementById('cy').style.display = 'none';
-  document.getElementById('path-view').style.display = 'none';
-  document.getElementById('reach-view').style.display = 'none';
-
-  if (view === 'graph') { document.getElementById('cy').style.display = 'block'; loadGraph(); }
-  else if (view === 'path') { document.getElementById('path-view').style.display = 'block'; loadPath(); }
-  else if (view === 'reach') { document.getElementById('reach-view').style.display = 'block'; loadReach(); }
-}
-
-async function loadGraph() {
-  if (!currentIncidentId) return;
-  status('Loading graph…', '#a0aec0');
-  try {
-    const data = await api(`/incidents/${currentIncidentId}/graph`);
-    renderGraph(data);
-    status('');
-  } catch(e) { status('Graph: ' + e.message, '#fc8181'); }
-}
-
-function renderGraph(data) {
-  const kindColors = { host:'#3182ce', user:'#68d391', ip:'#f6ad55', technique:'#fc8181', process:'#b794f4', unknown:'#718096' };
-  const elements = [
-    ...data.nodes.map(n => ({ data: { id: n.id, label: n.label, kind: n.kind, ...n.data } })),
-    ...data.edges.map(e => ({ data: { id: e.id, source: e.source, target: e.target, label: e.label } })),
-  ];
-  if (cy) cy.destroy();
-  cy = cytoscape({
-    container: document.getElementById('cy'),
-    elements,
-    style: [
-      { selector: 'node', style: { label: 'data(label)', 'background-color': n => kindColors[n.data('kind')] || '#718096', color: '#e2e8f0', 'font-size': 10, 'text-valign': 'bottom', 'text-margin-y': 5 } },
-      { selector: 'edge', style: { label: 'data(label)', 'font-size': 9, 'curve-style': 'bezier', 'target-arrow-shape': 'triangle', 'line-color': '#4a5568', 'target-arrow-color': '#4a5568', color: '#a0aec0' } },
-      { selector: ':selected', style: { 'background-color': '#63b3ed', 'line-color': '#63b3ed' } },
-    ],
-    layout: { name: 'cose', animate: true, padding: 40, nodeRepulsion: 8000, idealEdgeLength: 100 },
-  });
-  cy.on('tap', 'node', evt => {
-    const d = evt.target.data();
-    const panel = document.getElementById('detail-panel');
-    document.getElementById('detail-content').innerHTML = `<pre>${JSON.stringify(d, null, 2)}</pre>`;
-    panel.classList.add('open');
-  });
-}
-
-async function loadPath() {
-  if (!currentIncidentId) return;
-  status('Loading path…', '#a0aec0');
-  try {
-    const data = await api(`/incidents/${currentIncidentId}/path`);
-    const ul = document.getElementById('path-list');
-    ul.innerHTML = '';
-    data.steps.forEach(s => {
-      const li = document.createElement('li');
-      li.innerHTML = `<strong>${s.step_order}. ${s.technique_id}</strong><span class="tactic-tag">${s.tactic}</span><br>
-        <span style="color:#a0aec0;font-size:0.75rem;">${String(s.first_seen||'').slice(0,19)} → ${String(s.last_seen||'').slice(0,19)}</span><br>
-        <span style="color:#718096;">${(s.hosts||[]).join(', ')}</span>`;
-      ul.appendChild(li);
-    });
-    status('');
-  } catch(e) { status('Path: ' + e.message, '#fc8181'); }
-}
-
-async function loadReach() {
-  if (!currentIncidentId) return;
-  status('Loading reach…', '#a0aec0');
-  try {
-    const data = await api(`/incidents/${currentIncidentId}/reach`);
-    const el = document.getElementById('reach-list');
-    if (!data.reachable.length) { el.innerHTML = '<div style="color:#718096;">No reachable entities found.</div>'; return; }
-    el.innerHTML = data.reachable.map(r => `
-      <div style="background:#2d3748;border-radius:6px;padding:0.6rem;margin-bottom:0.5rem;">
-        <strong>${r.entity}</strong> <span style="color:#718096;">(${r.entity_kind})</span>
-        ${r.technique_id ? `<br><span style="color:#fc8181;">${r.technique_id}</span>` : ''}
-        ${r.tactic ? `<span class="tactic-tag">${r.tactic}</span>` : ''}
-        ${r.recommendation ? `<br><span style="color:#a0aec0;font-size:0.75rem;">💡 ${r.recommendation}</span>` : ''}
+    tooltip.innerHTML = `
+      <div style="font-weight:700;color:${typeConf.border};margin-bottom:0.35rem;display:flex;align-items:center;gap:0.4rem;">
+        ${getShapeSvg(typeConf.shape, typeConf.bg, typeConf.border, typeConf.borderStyle)}
+        <span>${escapeHtml(typeConf.label)}</span>
       </div>
-    `).join('');
-    status('');
-  } catch(e) { status('Reach: ' + e.message, '#fc8181'); }
-}
+      <div style="font-size:0.8rem;font-weight:700;margin-bottom:0.3rem;word-break:break-all;color:#fff;">
+        ${escapeHtml(d.label || d.id)}
+      </div>
+      <div style="font-size:0.72rem;color:#cbd5e1;line-height:1.45;border-top:1px solid #262e45;padding-top:0.3rem;">
+        ${roleDetails}
+      </div>
+    `;
 
-async function triggerAnalyse() {
-  status('Starting analysis…', '#a0aec0');
-  try {
-    const j = await apiPost('/jobs/analyse');
-    status(`Job ${j.job_id} queued`, '#68d391');
-    setTimeout(loadIncidents, 3000);
-  } catch(e) { status('Analyse error: ' + e.message, '#fc8181'); }
-}
+    const containerRect = document.getElementById('cy-container').getBoundingClientRect();
+    const x = Math.min(renderedPosition.x + 15, containerRect.width - 310);
+    const y = Math.min(renderedPosition.y + 15, containerRect.height - 150);
+    tooltip.style.left = `${Math.max(10, x)}px`;
+    tooltip.style.top = `${Math.max(10, y)}px`;
+    tooltip.style.display = 'block';
+  }
 
-function showIngestModal() {
-  const paths = prompt('Enter log file path(s), comma-separated:');
-  if (!paths) return;
-  const pathList = paths.split(',').map(p => p.trim()).filter(Boolean);
-  apiPost('/jobs/ingest', { paths: pathList })
-    .then(j => { status(`Ingest job ${j.job_id} queued`, '#68d391'); setTimeout(loadStats, 5000); })
-    .catch(e => status('Ingest error: ' + e.message, '#fc8181'));
-}
+  function hideNodeTooltip() {
+    const tooltip = document.getElementById('graph-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+  }
 
-// Initialise
-loadIncidents();
+  function showEdgeTooltip(edge, renderedPosition) {
+    const tooltip = document.getElementById('graph-tooltip');
+    if (!tooltip) return;
+
+    const allowed = edge.data('allowed_connections_observed') ?? 'N/A';
+    const lastObs = edge.data('last_observed') || 'N/A';
+    const crit = edge.data('asset_criticality') ?? 'N/A';
+    const service = edge.data('service') || edge.data('label') || '';
+    const reason = edge.data('reason') || '';
+
+    tooltip.innerHTML = `
+      <div style="font-weight:700;color:#c084fc;margin-bottom:0.3rem;display:flex;align-items:center;gap:0.3rem;">
+        <span>⚠️ Predicted Lateral Reach Path</span>
+      </div>
+      ${service ? `<div style="margin-bottom:0.2rem;"><strong>Service:</strong> ${escapeHtml(service)}</div>` : ''}
+      <div><strong>Allowed Connections:</strong> ${escapeHtml(allowed)}</div>
+      <div><strong>Last Observed:</strong> ${escapeHtml(lastObs)}</div>
+      <div><strong>Asset Criticality:</strong> ${escapeHtml(crit)}</div>
+      ${reason ? `<div style="margin-top:0.3rem;color:#94a3b8;font-size:0.7rem;border-top:1px solid #262e45;padding-top:0.2rem;">${escapeHtml(reason)}</div>` : ''}
+    `;
+
+    const containerRect = document.getElementById('cy-container').getBoundingClientRect();
+    const x = Math.min(renderedPosition.x + 15, containerRect.width - 290);
+    const y = Math.min(renderedPosition.y + 15, containerRect.height - 140);
+    tooltip.style.left = `${Math.max(10, x)}px`;
+    tooltip.style.top = `${Math.max(10, y)}px`;
+    tooltip.style.display = 'block';
+  }
+
+  function hideEdgeTooltip() {
+    const tooltip = document.getElementById('graph-tooltip');
+    if (tooltip) tooltip.style.display = 'none';
+  }
+
+  // ===========================================================================
+  // SECTION: LAYOUT & SPINE ALIGNMENT
+  // ===========================================================================
+
+  // Configure Cytoscape Dagre layout with the exact required parameters:
+  // name: 'dagre', rankDir: 'LR', ranker: 'network-simplex', nodeSep: 24, rankSep: 110, edgeSep: 10, fit: true, padding: 30
+  function applyDagreLayout() {
+    if (!cy || cy.nodes().length === 0) return;
+
+    try {
+      const layout = cy.layout({
+        name: 'dagre',
+        rankDir: 'LR',
+        ranker: 'network-simplex',
+        nodeSep: 24,
+        rankSep: 110,
+        edgeSep: 10,
+        fit: true,
+        padding: 30,
+        animate: true,
+        animationDuration: 300,
+        stop: function() {
+          alignSpineAndLanes();
+        }
+      });
+      layout.run();
+    } catch (e) {
+      console.warn('Dagre layout error, applying manual spine alignment:', e);
+      alignSpineAndLanes();
+    }
+  }
+
+  // Make incidents read as a wide left-to-right chain:
+  // 1. Kill-chain step nodes sit on one horizontal spine in step order.
+  // 2. Entity nodes (IPs, users, hosts) in lanes above and below it.
+  // 3. Predicted ghost nodes go to the right of the last step.
+  function alignSpineAndLanes() {
+    if (!cy || cy.nodes().length === 0) return;
+
+    // Collect and sort technique step nodes by step_order
+    const stepNodes = cy.nodes().filter(n => {
+      const t = n.data('type') || n.data('kind');
+      return t === 'technique_step' || t === 'technique';
+    }).sort((a, b) => (a.data('step_order') || 0) - (b.data('step_order') || 0));
+
+    // Determine baseline vertical spine Y
+    const containerHeight = document.getElementById('cy-container').clientHeight || 450;
+    const spineY = Math.max(180, Math.floor(containerHeight / 2));
+    const stepSpacing = 160;
+    const startX = 90;
+
+    const stepPositions = new Map();
+    stepNodes.forEach((node, idx) => {
+      const x = startX + (idx * stepSpacing);
+      node.position({ x: x, y: spineY });
+      stepPositions.set(node.id(), { x, stepOrder: node.data('step_order') || (idx + 1) });
+    });
+
+    const lastStepX = stepNodes.length > 0 ? (startX + ((stepNodes.length - 1) * stepSpacing)) : startX;
+
+    // Place entity nodes into structured lanes around their corresponding step
+    const assignedEntities = new Set();
+
+    stepNodes.forEach((stepNode) => {
+      const sPos = stepPositions.get(stepNode.id());
+      const connectedEdges = stepNode.connectedEdges();
+
+      let userIdx = 0;
+      let hostIdx = 0;
+      let ipIdx = 0;
+
+      connectedEdges.forEach(edge => {
+        const otherNode = edge.source().id() === stepNode.id() ? edge.target() : edge.source();
+        if (otherNode.id() === stepNode.id() || assignedEntities.has(otherNode.id())) return;
+
+        const type = otherNode.data('type') || otherNode.data('kind');
+        if (type === 'technique_step' || type === 'technique' || type === 'predicted_target') return;
+
+        assignedEntities.add(otherNode.id());
+
+        if (type === 'user') {
+          // Upper lane: Users
+          const y = spineY - 80 - (userIdx * 55);
+          const x = sPos.x + (userIdx * 25);
+          otherNode.position({ x, y });
+          userIdx++;
+        } else if (type === 'external_ip') {
+          // Upper-outer lane: Inbound IPs
+          const y = spineY - 145 - (ipIdx * 50);
+          const x = sPos.x - 45 - (ipIdx * 30);
+          otherNode.position({ x, y });
+          ipIdx++;
+        } else if (type === 'critical_asset') {
+          // Lower-deep lane: Critical Assets (DC/DB/Server)
+          const y = spineY + 145 + (hostIdx * 50);
+          const x = sPos.x + (hostIdx * 30);
+          otherNode.position({ x, y });
+          hostIdx++;
+        } else {
+          // Lower lane: Internal Hosts
+          const y = spineY + 80 + (hostIdx * 50);
+          const x = sPos.x + (hostIdx * 25);
+          otherNode.position({ x, y });
+          hostIdx++;
+        }
+      });
+    });
+
+    // Predicted ghost nodes: positioned to the right of the last step
+    const predictedNodes = cy.nodes().filter(n => {
+      const t = n.data('type') || n.data('kind');
+      return t === 'predicted_target' || n.data('ghost') || n.hasClass('ghost');
+    });
+
+    if (predictedNodes.length > 0) {
+      const predStartX = lastStepX + 140;
+      const totalPred = predictedNodes.length;
+      predictedNodes.forEach((pNode, pIdx) => {
+        const col = Math.floor(pIdx / 5);
+        const row = pIdx % 5;
+        const x = predStartX + (col * 125);
+        const y = spineY - 90 + (row * 45);
+        pNode.position({ x, y });
+        assignedEntities.add(pNode.id());
+      });
+    }
+
+    // Fit graph with standard padding
+    cy.fit(undefined, 30);
+  }
+
+  // ===========================================================================
+  // SECTION: SCRUBBER TIMELINE & DEVICE COLORING
+  // ===========================================================================
+
+  // Pulse animation on the Cytoscape canvas for the step a node first turns red (compromised)
+  function pulseCompromisedNode(cyNode) {
+    if (!cyNode || cyNode.length === 0) return;
+    cyNode.stop();
+    cyNode.animate({
+      style: {
+        'width': '48px',
+        'height': '48px',
+        'border-width': '7px',
+        'border-color': '#f87171'
+      },
+      duration: 180
+    }).promise().then(() => {
+      cyNode.animate({
+        style: {
+          'width': '34px',
+          'height': '34px',
+          'border-width': '3.5px',
+          'border-color': '#b91c1c'
+        },
+        duration: 220
+      });
+    });
+  }
+
+  // Pre-calculate at which step each node becomes compromised so forward/backward scrubbing is 100% deterministic
+  function computeStepCompromiseSchedule() {
+    nodeFirstCompromisedStep.clear();
+    if (!currentIncident || !currentIncident.steps) return;
+
+    const steps = currentIncident.steps;
+    steps.forEach(step => {
+      const sNum = step.step_order;
+      const detIds = step.detection_ids || [];
+      const stepHosts = step.hosts || [];
+
+      // Check detections for this step
+      detIds.forEach(did => {
+        const det = detectionsMap.get(did);
+        if (det) {
+          const isCompromisedDet = (det.severity >= 7) || isHighFidelityRule(det.rule_id);
+          if (isCompromisedDet && det.host) {
+            if (!nodeFirstCompromisedStep.has(det.host)) {
+              nodeFirstCompromisedStep.set(det.host, sNum);
+            }
+          }
+        }
+      });
+
+      // If step has severity >= 7 in detections, hosts in this step are marked compromised
+      const hasHighSev = detIds.some(did => {
+        const d = detectionsMap.get(did);
+        return d && ((d.severity >= 7) || isHighFidelityRule(d.rule_id));
+      });
+      if (hasHighSev) {
+        stepHosts.forEach(h => {
+          if (!nodeFirstCompromisedStep.has(h)) {
+            nodeFirstCompromisedStep.set(h, sNum);
+          }
+        });
+      }
+    });
+  }
+
+  function isHighFidelityRule(ruleId) {
+    if (!ruleId) return false;
+    const r = String(ruleId).toLowerCase();
+    return r.includes('cve') || r.includes('exploit') || r.includes('sqli') ||
+           r.includes('payload') || r.includes('lateral') || r.includes('mimikatz') ||
+           r.includes('dump') || r.includes('ransom') || r.includes('rce');
+  }
+
+  // Recolor devices by state computed from detections up to stepNum:
+  // - Not yet seen: gray (#64748b)
+  // - Touched/targeted: amber (#f59e0b)
+  // - Compromised: red (#ef4444) with pulse animation on step it first turns red
+  // - Predicted at-risk: dashed purple outline (#a855f7)
+  function updateDeviceColorsForStep(stepNum) {
+    if (!cy) return;
+
+    const deviceNodes = cy.nodes().filter(n => {
+      const t = n.data('type') || n.data('kind');
+      return t !== 'technique_step' && t !== 'technique';
+    });
+
+    const counterEl = document.getElementById('scrubber-counter');
+
+    // Default View (Step 0 or Reset)
+    if (stepNum === 0) {
+      deviceNodes.forEach(node => {
+        node.removeClass('state-not-seen state-touched state-compromised state-predicted-risk');
+      });
+      previouslyCompromisedNodes.clear();
+
+      const totalCompromised = nodeFirstCompromisedStep.size;
+      const totalSteps = (currentIncident && currentIncident.steps) ? currentIncident.steps.length : (currentStory ? currentStory.steps.length : 0);
+      if (counterEl) {
+        counterEl.textContent = `Default View: ${totalCompromised} devices compromised across all ${totalSteps} steps`;
+        counterEl.className = 'pill pill-blue';
+      }
+      return;
+    }
+
+    // Active steps up to stepNum
+    const activeSteps = (currentIncident && currentIncident.steps)
+      ? currentIncident.steps.filter(s => s.step_order <= stepNum)
+      : [];
+
+    const touchedEntities = new Set();
+    const compromisedEntities = new Set();
+
+    activeSteps.forEach(s => {
+      (s.hosts || []).forEach(h => touchedEntities.add(h));
+      (s.detection_ids || []).forEach(did => {
+        const det = detectionsMap.get(did);
+        if (det && det.host) {
+          touchedEntities.add(det.host);
+          if (det.severity >= 7 || isHighFidelityRule(det.rule_id)) {
+            compromisedEntities.add(det.host);
+          }
+        }
+      });
+    });
+
+    // Also include any entity whose first compromise step is <= stepNum
+    for (const [entityId, firstStep] of nodeFirstCompromisedStep.entries()) {
+      if (firstStep <= stepNum) {
+        compromisedEntities.add(entityId);
+        touchedEntities.add(entityId);
+      }
+    }
+
+    // Recolor each device node
+    const currentCompromisedSet = new Set();
+
+    deviceNodes.forEach(node => {
+      const nid = node.id();
+      const isPredicted = node.data('type') === 'predicted_target' || node.data('ghost') || node.hasClass('ghost');
+
+      node.removeClass('state-not-seen state-touched state-compromised state-predicted-risk');
+
+      if (compromisedEntities.has(nid)) {
+        node.addClass('state-compromised');
+        currentCompromisedSet.add(nid);
+
+        // Check if this is the step it FIRST turns red and wasn't pulsed in current view
+        const firstStep = nodeFirstCompromisedStep.get(nid);
+        if (firstStep === stepNum && !previouslyCompromisedNodes.has(nid)) {
+          pulseCompromisedNode(node);
+        }
+      } else if (touchedEntities.has(nid)) {
+        node.addClass('state-touched');
+      } else if (isPredicted) {
+        node.addClass('state-predicted-risk');
+      } else {
+        node.addClass('state-not-seen');
+      }
+    });
+
+    previouslyCompromisedNodes = currentCompromisedSet;
+
+    // Update dynamic counter display
+    const totalSteps = (currentIncident && currentIncident.steps) ? currentIncident.steps.length : (currentStory ? currentStory.steps.length : 0);
+    const countCompromised = compromisedEntities.size;
+    if (counterEl) {
+      counterEl.textContent = `${countCompromised} device${countCompromised === 1 ? '' : 's'} compromised at step ${stepNum} of ${totalSteps}`;
+      counterEl.className = countCompromised > 0 ? 'pill pill-red' : 'pill pill-amber';
+    }
+  }
+
+  // Scrubber highlight handler
+  function highlightStep(stepNum) {
+    activeStepFilter = stepNum;
+
+    // Scrubber badge active styling
+    const btns = document.querySelectorAll('.step-badge-btn');
+    btns.forEach((btn, idx) => {
+      btn.classList.toggle('active', idx === stepNum);
+    });
+
+    // Step card selection in Story pane
+    document.querySelectorAll('.step-card').forEach(c => c.classList.remove('selected'));
+    if (stepNum > 0) {
+      const activeCard = document.getElementById(`step-card-${stepNum}`);
+      if (activeCard) {
+        activeCard.classList.add('selected');
+        activeCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    if (!cy) return;
+
+    // Recolor devices based on detection timeline
+    updateDeviceColorsForStep(stepNum);
+
+    if (stepNum === 0) {
+      cy.elements().removeClass('highlighted dimmed');
+      return;
+    }
+
+    // Highlight step edges and connected nodes
+    cy.elements().addClass('dimmed').removeClass('highlighted');
+    const stepEdges = cy.edges().filter(e => e.data('step_order') === stepNum);
+    stepEdges.removeClass('dimmed').addClass('highlighted');
+    stepEdges.connectedNodes().removeClass('dimmed').addClass('highlighted');
+
+    // Also highlight the technique step node itself
+    const stepNode = cy.nodes().filter(n => {
+      const t = n.data('type') || n.data('kind');
+      return (t === 'technique_step' || t === 'technique') && n.data('step_order') === stepNum;
+    });
+    if (stepNode.length > 0) {
+      stepNode.removeClass('dimmed').addClass('highlighted');
+    }
+  }
+
+  function highlightGraphNode(nodeId) {
+    if (!cy) return;
+    cy.elements().removeClass('highlighted');
+    const node = cy.getElementById(nodeId);
+    if (node && node.length > 0) {
+      node.addClass('highlighted');
+      node.connectedEdges().addClass('highlighted');
+    }
+  }
+
+  function scrollStoryToEntity(entityId) {
+    const cards = document.querySelectorAll('.step-card');
+    for (const card of cards) {
+      if (card.textContent.includes(entityId)) {
+        card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        card.classList.add('selected');
+        setTimeout(() => card.classList.remove('selected'), 1800);
+        break;
+      }
+    }
+  }
+
+  // ===========================================================================
+  // SECTION: DATA LOADING & INTEGRATION
+  // ===========================================================================
+
+  let showLeadsEnabled = false;
+
+  function toggleShowLeads(checked) {
+    showLeadsEnabled = checked;
+    loadIncidents();
+  }
+
+  // Load Incidents dropdown
+  async function loadIncidents() {
+    try {
+      const url = showLeadsEnabled ? '/api/v1/incidents?limit=50&show_leads=true' : '/api/v1/incidents?limit=50';
+      const res = await fetch(url);
+      const data = await res.json();
+      const select = document.getElementById('incidentSelect');
+      select.innerHTML = '';
+
+      if (!data.items || data.items.length === 0) {
+        select.innerHTML = '<option value="">No incidents found</option>';
+        return;
+      }
+
+      data.items.sort((a, b) => (b.risk_score || 0) - (a.risk_score || 0));
+
+      data.items.forEach(inc => {
+        const opt = document.createElement('option');
+        opt.value = inc.incident_id;
+
+        let spanStr = '';
+        if (inc.first_seen && inc.last_seen) {
+          const s = new Date(inc.first_seen).getTime();
+          const e = new Date(inc.last_seen).getTime();
+          if (!isNaN(s) && !isNaN(e) && e >= s) {
+            const diffHours = ((e - s) / 3600000).toFixed(1);
+            spanStr = `${diffHours}h`;
+          }
+        }
+
+        const titleText = inc.title || inc.incident_id;
+        opt.textContent = `[Sev ${inc.severity}] ${titleText}${spanStr ? ' · ' + spanStr : ''}`;
+        select.appendChild(opt);
+      });
+
+      if (currentIncidentId && data.items.some(i => i.incident_id === currentIncidentId)) {
+        select.value = currentIncidentId;
+      } else {
+        currentIncidentId = data.items[0].incident_id;
+        select.value = currentIncidentId;
+      }
+
+      loadIncidentData(currentIncidentId);
+    } catch (err) {
+      console.error('Failed loading incidents:', err);
+    }
+  }
+
+  // Load all data for an incident
+  async function loadIncidentData(incId) {
+    if (!incId) return;
+    currentIncidentId = incId;
+    clearLogStepFilter(false);
+
+    await Promise.allSettled([
+      fetchIncidentDetails(incId),
+      loadIncidentDetections(incId),
+      loadGraph(incId),
+      loadStory(incId),
+      loadAttackLogs(incId, 0, currentLogsSeverity),
+      loadNextPaths(incId)
+    ]);
+
+    computeStepCompromiseSchedule();
+    highlightStep(0);
+  }
+
+  async function fetchIncidentDetails(incId) {
+    try {
+      const res = await fetch(`/api/v1/incidents/${incId}`);
+      if (res.ok) {
+        currentIncident = await res.json();
+      }
+    } catch (e) {
+      console.warn('Failed loading incident details:', e);
+    }
+  }
+
+  async function loadIncidentDetections(incId) {
+    try {
+      const res = await fetch(`/api/v1/detections?incident_id=${incId}&limit=500`);
+      if (res.ok) {
+        const data = await res.json();
+        currentDetections = data.items || [];
+        detectionsMap.clear();
+        currentDetections.forEach(d => detectionsMap.set(d.detection_id, d));
+      }
+    } catch (e) {
+      console.warn('Failed loading detections:', e);
+    }
+  }
+
+  // Load Graph with Error Banner handling
+  async function loadGraph(incId) {
+    const errBanner = document.getElementById('graph-error-banner');
+    try {
+      const res = await fetch(`/api/v1/incidents/${incId}/graph`);
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status} ${res.statusText}`;
+        try {
+          const errData = await res.json();
+          if (errData && errData.detail) errMsg = errData.detail;
+        } catch (_) {}
+        if (errBanner) {
+          errBanner.innerHTML = `<span style="font-weight:700;">⚠️ Error loading attack graph (Status ${res.status}):</span> ${escapeHtml(errMsg)}`;
+          errBanner.style.display = 'flex';
+        }
+        if (cy) cy.elements().remove();
+        return;
+      }
+
+      if (errBanner) errBanner.style.display = 'none';
+      currentGraph = await res.json();
+
+      cy.elements().remove();
+      const cyElements = [];
+
+      // Determine step nodes to sort & connect horizontally
+      const stepNodesRaw = [];
+      const predictedNodesRaw = [];
+
+      (currentGraph.nodes || []).forEach(n => {
+        const isGhost = Boolean((n.data && (n.data.ghost || n.data.is_ghost)) || n.ghost || n.kind === 'ghost');
+        let kind = n.kind || (n.data && n.data.kind) || 'internal_host';
+
+        // Normalize kind to one of the 6 NODE_STYLE keys
+        let styleKey = 'internal_host';
+        if (isGhost) {
+          styleKey = 'predicted_target';
+        } else if (kind === 'technique' || kind === 'technique_step') {
+          styleKey = 'technique_step';
+        } else if (kind === 'critical_asset') {
+          styleKey = 'critical_asset';
+        } else if (kind === 'user') {
+          styleKey = 'user';
+        } else if (kind === 'external_ip') {
+          styleKey = 'external_ip';
+        } else {
+          styleKey = 'internal_host';
+        }
+
+        const stepOrder = n.data ? (n.data.step_order || 0) : 0;
+        const nodePayload = {
+          group: 'nodes',
+          data: {
+            id: n.id,
+            label: n.label || n.id,
+            kind: styleKey,
+            type: styleKey,
+            step_order: stepOrder,
+            ghost: isGhost,
+            tactic: (n.data && n.data.tactic) || '',
+            stage: (n.data && n.data.stage) || '',
+            first_seen: (n.data && n.data.first_seen) || '',
+            criticality: (n.data && n.data.asset_criticality) || ''
+          },
+          classes: isGhost ? 'predicted_target ghost' : styleKey
+        };
+
+        cyElements.push(nodePayload);
+
+        if (styleKey === 'technique_step') {
+          stepNodesRaw.push({ id: n.id, step_order: stepOrder });
+        } else if (styleKey === 'predicted_target') {
+          predictedNodesRaw.push({ id: n.id });
+        }
+      });
+
+      const existingEdges = new Set();
+
+      (currentGraph.edges || []).forEach(e => {
+        const isPredicted = Boolean(e.data && (e.data.predicted || e.data.is_predicted)) || Boolean(e.predicted) || e.label === 'predicted_reach';
+        const ev = (e.data && e.data.evidence) || {};
+        const edgeId = e.id || `e_${e.source}_${e.target}`;
+        existingEdges.add(`${e.source}->${e.target}`);
+
+        cyElements.push({
+          group: 'edges',
+          data: {
+            id: edgeId,
+            source: e.source,
+            target: e.target,
+            label: e.label || '',
+            predicted: isPredicted,
+            step_order: (e.data && e.data.step_order) || 0,
+            technique_id: (e.data && e.data.technique_id) || '',
+            reason: (e.data && e.data.reason) || '',
+            evidence: ev,
+            allowed_connections_observed: ev.allowed_connections_observed ?? (e.data && e.data.allowed_connections_observed),
+            last_observed: ev.last_observed ?? (e.data && e.data.last_observed),
+            asset_criticality: ev.asset_criticality ?? (e.data && e.data.asset_criticality),
+            service: (e.data && e.data.service) || ''
+          },
+          classes: isPredicted ? 'predicted-edge' : ''
+        });
+      });
+
+      // Connect technique steps into sequential horizontal spine edges
+      stepNodesRaw.sort((a, b) => a.step_order - b.step_order);
+      for (let i = 0; i < stepNodesRaw.length - 1; i++) {
+        const s1 = stepNodesRaw[i];
+        const s2 = stepNodesRaw[i + 1];
+        const spineEdgeId = `spine_${s1.id}_${s2.id}`;
+        if (!existingEdges.has(`${s1.id}->${s2.id}`)) {
+          cyElements.push({
+            group: 'edges',
+            data: {
+              id: spineEdgeId,
+              source: s1.id,
+              target: s2.id,
+              label: `step ${s1.step_order} → ${s2.step_order}`,
+              spine: true,
+              step_order: s1.step_order
+            },
+            classes: 'spine-edge'
+          });
+          existingEdges.add(`${s1.id}->${s2.id}`);
+        }
+      }
+
+      cy.add(cyElements);
+      applyDagreLayout();
+    } catch (err) {
+      console.error('Failed loading graph:', err);
+      if (errBanner) {
+        errBanner.innerHTML = `<span style="font-weight:700;">⚠️ Error loading attack graph:</span> ${escapeHtml(err.message)}`;
+        errBanner.style.display = 'flex';
+      }
+    }
+  }
+
+  // Load Attack Story with Fallback Reason Banner
+  async function loadStory(incId, forceRefresh = false) {
+    const fallbackBanner = document.getElementById('story-fallback-banner');
+    try {
+      const endpoint = forceRefresh
+        ? `/api/v1/incidents/${incId}/story/regenerate`
+        : `/api/v1/incidents/${incId}/story`;
+      const method = forceRefresh ? 'POST' : 'GET';
+
+      const res = await fetch(endpoint, { method });
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status}`;
+        try {
+          const errJson = await res.json();
+          if (errJson && errJson.detail) errMsg = errJson.detail;
+        } catch (_) {}
+        if (fallbackBanner) {
+          fallbackBanner.innerHTML = `⚠️ <strong>Story generation error (${res.status}):</strong> ${escapeHtml(errMsg)}`;
+          fallbackBanner.style.display = 'block';
+        }
+        return;
+      }
+
+      currentStory = await res.json();
+      renderStory(currentStory);
+    } catch (err) {
+      console.error('Failed loading story:', err);
+      if (fallbackBanner) {
+        fallbackBanner.innerHTML = `⚠️ <strong>Failed to load story:</strong> ${escapeHtml(err.message)}`;
+        fallbackBanner.style.display = 'block';
+      }
+    }
+  }
+
+  function renderStory(story) {
+    document.getElementById('story-headline').textContent = story.headline || 'Incident Attack Narrative';
+
+    // Story Source Header Badge:
+    // Show "Gemini" badge if story.source === 'llm' || story.story_source === 'llm' || story.source === 'ai' || provider === 'gemini'
+    // Show "Template" badge (with tooltip showing reason) if story.source === 'template' || story.story_source === 'template'
+    // Clean source badge presentation
+    const badge = document.getElementById('story-source-badge');
+    const source = (story.story_source || story.source || '').toLowerCase();
+    const provider = (story.provider || '').toLowerCase();
+
+    if (source === 'llm' || story.story_source === 'llm' || source === 'ai' || provider === 'gemini') {
+      badge.textContent = 'Gemini';
+      badge.className = 'source-badge badge-gemini';
+      badge.title = 'AI incident narrative generated with Gemini';
+    } else {
+      badge.textContent = 'Template';
+      badge.className = 'source-badge badge-template';
+      badge.title = story.fallback_reason ? `Template fallback reason: ${story.fallback_reason}` : 'Rule-based incident template';
+    }
+
+    // Provider, Model & Generated At
+    const provEl = document.getElementById('meta-provider-model');
+    if (story.provider || story.model) {
+      const pText = (story.provider || '').toLowerCase() === 'gemini' ? 'Gemini AI' : (story.provider || 'Story Engine');
+      const mText = story.model ? ` (${story.model})` : '';
+      provEl.textContent = `${pText}${mText}`;
+      provEl.style.display = 'inline-flex';
+    } else {
+      provEl.style.display = 'none';
+    }
+
+    const genEl = document.getElementById('meta-generated-at');
+    if (story.generated_at) {
+      const dt = new Date(story.generated_at);
+      genEl.textContent = `Generated: ${isNaN(dt.getTime()) ? story.generated_at : dt.toLocaleTimeString()}`;
+      genEl.style.display = 'inline-flex';
+    } else {
+      genEl.style.display = 'none';
+    }
+
+    // Fallback banner
+    const fallbackBanner = document.getElementById('story-fallback-banner');
+    if (story.fallback_reason) {
+      fallbackBanner.innerHTML = `⚠️ <strong>Fallback to template:</strong> ${escapeHtml(story.fallback_reason)}`;
+      fallbackBanner.style.display = 'block';
+    } else {
+      fallbackBanner.style.display = 'none';
+    }
+
+    document.getElementById('executive-summary').textContent = story.executive_summary || '';
+    document.getElementById('attack-path-summary').textContent = story.attack_path_summary || '';
+    document.getElementById('blast-radius-text').textContent = story.blast_radius_assessment || '';
+
+    // Timeline Scrubber buttons
+    const timelineContainer = document.getElementById('timelineSteps');
+    timelineContainer.innerHTML = '<button class="step-badge-btn active" onclick="highlightStep(0)">All Steps</button>';
+
+    // Render Steps
+    const stepsContainer = document.getElementById('steps-container');
+    stepsContainer.innerHTML = '';
+
+    (story.steps || []).forEach(step => {
+      // Add scrubber step button
+      const stepBtn = document.createElement('button');
+      stepBtn.className = 'step-badge-btn';
+      stepBtn.textContent = `Step ${step.step_order}: ${step.technique_id}`;
+      stepBtn.onclick = () => {
+        highlightStep(step.step_order);
+        filterLogsByStep(step.step_order);
+      };
+      timelineContainer.appendChild(stepBtn);
+
+      // Story step card
+      const card = document.createElement('div');
+      card.className = 'step-card';
+      card.id = `step-card-${step.step_order}`;
+      card.onclick = () => {
+        highlightStep(step.step_order);
+        filterLogsByStep(step.step_order);
+      };
+
+      const citedChipsHtml = (step.cited_event_ids || []).map(eid => `
+        <span class="event-chip" onclick="openEvidenceDrawer(event, '${eid}')" title="Click to inspect raw event in Evidence Drawer">
+          🔍 ${eid}
+        </span>
+      `).join('');
+
+      card.innerHTML = `
+        <div class="step-card-header">
+          <div style="display:flex;align-items:center;gap:0.4rem;">
+            <span class="step-num-pill">Step ${step.step_order}</span>
+            <span class="step-tech-tag">${escapeHtml(step.technique_id)} · ${escapeHtml(step.technique_name || step.technique_id)}</span>
+          </div>
+          <span style="font-size:0.7rem;color:#94a3b8;font-weight:600;">${escapeHtml(step.tactic || '')}</span>
+        </div>
+        <div class="step-headline">${escapeHtml(step.headline)}</div>
+        <div class="card-prose" style="font-size:0.8rem;">${escapeHtml(step.narrative)}</div>
+        <div class="step-telemetry">
+          <span>📅 ${(step.first_seen || '').split('T')[0] || step.first_seen || '-'}</span>
+          <span>📊 ${step.event_count || 1} raw events</span>
+        </div>
+        ${step.cited_event_ids && step.cited_event_ids.length ? `<div class="event-chips">${citedChipsHtml}</div>` : ''}
+      `;
+      stepsContainer.appendChild(card);
+    });
+
+    // Render Containment Actions
+    const actionsContainer = document.getElementById('actions-container');
+    actionsContainer.innerHTML = '';
+    (story.recommended_actions || []).forEach(action => {
+      const actDiv = document.createElement('div');
+      actDiv.className = 'action-item';
+      const prioClass = action.priority === 1 ? 'prio-1' : (action.priority === 2 ? 'prio-2' : 'prio-3');
+
+      actDiv.innerHTML = `
+        <div class="action-header">
+          <span style="font-weight:700;font-size:0.8rem;color:#f8fafc;">${escapeHtml(action.action)} (${escapeHtml(action.target)})</span>
+          <span class="action-prio ${prioClass}">P${action.priority}</span>
+        </div>
+        <div style="font-size:0.76rem;color:#cbd5e1;">${escapeHtml(action.rationale)}</div>
+        ${action.command ? `
+          <div class="cmd-box">
+            <span>${escapeHtml(action.command)}</span>
+            <button class="copy-btn" onclick="copyToClipboard('${escapeHtml(action.command.replace(/'/g, "\\'"))}')">Copy</button>
+          </div>
+        ` : ''}
+      `;
+      actionsContainer.appendChild(actDiv);
+    });
+  }
+
+  // ===========================================================================
+  // SECTION: ATTACK LOGS
+  // ===========================================================================
+
+  async function loadAttackLogs(incId, offset = 0, severity = '') {
+    if (!incId) return;
+    currentLogsOffset = offset;
+    currentLogsSeverity = severity;
+
+    const tbody = document.getElementById('attack-logs-tbody');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-muted);">Loading attack logs...</td></tr>';
+
+    try {
+      let url = `/api/v1/incidents/${incId}/logs?limit=${currentLogsLimit}&offset=${offset}`;
+      if (severity) url += `&severity=${encodeURIComponent(severity)}`;
+
+      const res = await fetch(url);
+      if (!res.ok) {
+        tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-muted);">No attack logs available for this incident (Status ${res.status}).</td></tr>`;
+        updateLogFilterCounts({});
+        updateLogsPagination(0, 0, 0);
+        return;
+      }
+
+      const data = await res.json();
+      cachedIncidentLogs = data.items || [];
+      totalIncidentLogs = data.total || 0;
+
+      updateLogFilterCounts(data.counts || {}, data.total || 0);
+      renderAttackLogsTable();
+      updateLogsPagination(offset, cachedIncidentLogs.length, totalIncidentLogs);
+    } catch (err) {
+      console.error('Failed loading attack logs:', err);
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--danger);">Failed to load attack logs: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  function updateLogFilterCounts(counts, total) {
+    const allCnt = total !== undefined ? total : ((counts.critical || 0) + (counts.high || 0) + (counts.medium || 0) + (counts.low || 0) + (counts.info || 0));
+    document.getElementById('cnt-all').textContent = allCnt;
+    document.getElementById('cnt-critical').textContent = counts.critical || 0;
+    document.getElementById('cnt-high').textContent = counts.high || 0;
+    document.getElementById('cnt-medium').textContent = counts.medium || 0;
+    document.getElementById('cnt-low').textContent = counts.low || 0;
+    document.getElementById('cnt-info').textContent = counts.info || 0;
+
+    document.querySelectorAll('.log-filter-chip').forEach(chip => {
+      chip.classList.toggle('active', chip.getAttribute('data-sev') === currentLogsSeverity);
+    });
+  }
+
+  function setLogSeverityFilter(sev) {
+    currentLogsSeverity = sev;
+    loadAttackLogs(currentIncidentId, 0, currentLogsSeverity);
+  }
+
+  function renderAttackLogsTable() {
+    const tbody = document.getElementById('attack-logs-tbody');
+    let items = cachedIncidentLogs;
+
+    // Filter by step or entity if active
+    if (currentLogStepFilter !== null && currentStory && currentStory.steps) {
+      const step = currentStory.steps.find(s => s.step_order === currentLogStepFilter);
+      if (step && step.cited_event_ids && step.cited_event_ids.length > 0) {
+        const eidSet = new Set(step.cited_event_ids);
+        items = items.filter(it => eidSet.has(it.event_id));
+      }
+    } else if (currentLogEntityFilter) {
+      items = items.filter(it => it.src_ip === currentLogEntityFilter || it.dst_ip === currentLogEntityFilter);
+    }
+
+    if (items.length === 0) {
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:1.5rem;color:var(--text-muted);">No attack logs matching current filter.</td></tr>`;
+      return;
+    }
+
+    const sevColors = {
+      critical: '#ef4444',
+      high: '#f97316',
+      medium: '#eab308',
+      low: '#3b82f6',
+      info: '#6b7280'
+    };
+
+    tbody.innerHTML = items.map(item => {
+      let sev = (item.severity_label || '').toLowerCase();
+      if (!sev) {
+        const eff = item.effective_severity || 0;
+        sev = eff >= 9 ? 'critical' : (eff >= 7 ? 'high' : (eff >= 4 ? 'medium' : (eff >= 1 ? 'low' : 'info')));
+      }
+      const sevColor = sevColors[sev] || '#6b7280';
+      const ruleAttack = item.attack || (item.detections && item.detections[0] ? item.detections[0].rule_name : '-');
+      const detCount = item.detections ? item.detections.length : 0;
+      const timeStr = item.ts ? item.ts.replace('T', ' ').replace('Z', '') : '-';
+
+      return `
+        <tr class="log-row" style="border-left: 3px solid ${sevColor};" onclick="toggleLogRowDetail('${item.event_id}', '${escapeHtml(item.src_ip || '')}', '${escapeHtml(item.dst_ip || '')}')">
+          <td style="font-family:monospace;font-size:0.72rem;color:#cbd5e1;">${escapeHtml(timeStr)}</td>
+          <td><span class="badge-sev badge-sev-${sev}">${escapeHtml(sev.toUpperCase())}</span></td>
+          <td><span class="pill" style="font-size:0.65rem;">${escapeHtml(item.action || '-')}</span></td>
+          <td style="font-family:monospace;color:#60a5fa;">${escapeHtml(item.src_ip || '-')}</td>
+          <td style="font-family:monospace;color:#93c5fd;">${escapeHtml(item.dst_ip || '-')}${item.dst_port ? ':' + item.dst_port : ''}</td>
+          <td style="color:#e2e8f0;font-size:0.74rem;">${escapeHtml(ruleAttack)}</td>
+          <td style="text-align:center;"><span class="pill ${detCount > 0 ? 'pill-amber' : ''}" style="font-size:0.65rem;">${detCount}</span></td>
+        </tr>
+        <tr class="log-detail-row" id="log-detail-${item.event_id}" style="display:none;">
+          <td colspan="7" style="background:#090d16;padding:0.6rem 0.8rem;border-left:3px solid ${sevColor};">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:0.35rem;">
+              <span style="font-weight:700;color:#93c5fd;font-size:0.75rem;">Event ID: ${escapeHtml(item.event_id)}</span>
+              <button class="btn" style="padding:0.15rem 0.4rem;font-size:0.68rem;" onclick="event.stopPropagation(); copyToClipboard('${escapeHtml((item.raw || '').replace(/'/g, "\\'"))}')">Copy Raw</button>
+            </div>
+            <pre style="white-space:pre-wrap;font-family:monospace;font-size:0.72rem;color:#cbd5e1;background:#121622;padding:0.45rem;border-radius:4px;border:1px solid #1f273d;max-height:140px;overflow-y:auto;">${escapeHtml(item.raw || JSON.stringify(item, null, 2))}</pre>
+            ${item.detections && item.detections.length ? `
+              <div style="margin-top:0.4rem;display:flex;flex-wrap:wrap;gap:0.3rem;align-items:center;">
+                <span style="font-size:0.7rem;color:#fbbf24;font-weight:600;">Detections:</span>
+                ${item.detections.map(d => `<span class="pill pill-amber" style="font-size:0.65rem;">${escapeHtml(d.rule_name || d.rule_id)} [${escapeHtml(d.technique_id || '-')}] Sev ${d.severity}</span>`).join('')}
+              </div>
+            ` : ''}
+          </td>
+        </tr>
+      `;
+    }).join('');
+  }
+
+  function toggleLogRowDetail(eventId, srcIp, dstIp) {
+    const detailRow = document.getElementById(`log-detail-${eventId}`);
+    if (detailRow) {
+      const isShown = detailRow.style.display !== 'none';
+      detailRow.style.display = isShown ? 'none' : 'table-row';
+    }
+
+    if (cy) {
+      cy.elements().removeClass('highlighted');
+      let targetNode = null;
+      if (srcIp) targetNode = cy.getElementById(srcIp);
+      if (!targetNode || targetNode.length === 0) {
+        if (dstIp) targetNode = cy.getElementById(dstIp);
+      }
+      if (targetNode && targetNode.length > 0) {
+        targetNode.addClass('highlighted');
+        targetNode.connectedEdges().addClass('highlighted');
+        cy.animate({
+          center: { eles: targetNode },
+          duration: 300
+        });
+      }
+    }
+  }
+
+  function filterLogsByStep(stepOrder) {
+    currentLogStepFilter = stepOrder;
+    currentLogEntityFilter = null;
+    const tag = document.getElementById('active-log-filter-tag');
+    const clearBtn = document.getElementById('btn-clear-log-filter');
+    tag.textContent = `Filtered by Step ${stepOrder}`;
+    tag.style.display = 'inline-flex';
+    clearBtn.style.display = 'inline-flex';
+    renderAttackLogsTable();
+  }
+
+  function filterLogsByEntity(entityId) {
+    currentLogEntityFilter = entityId;
+    currentLogStepFilter = null;
+    const tag = document.getElementById('active-log-filter-tag');
+    const clearBtn = document.getElementById('btn-clear-log-filter');
+    tag.textContent = `Filtered by Entity: ${entityId}`;
+    tag.style.display = 'inline-flex';
+    clearBtn.style.display = 'inline-flex';
+    renderAttackLogsTable();
+  }
+
+  function clearLogStepFilter(reRender = true) {
+    currentLogStepFilter = null;
+    currentLogEntityFilter = null;
+    const tag = document.getElementById('active-log-filter-tag');
+    const clearBtn = document.getElementById('btn-clear-log-filter');
+    if (tag) tag.style.display = 'none';
+    if (clearBtn) clearBtn.style.display = 'none';
+    if (reRender) renderAttackLogsTable();
+  }
+
+  function updateLogsPagination(offset, count, total) {
+    const info = document.getElementById('attack-logs-page-info');
+    const btnPrev = document.getElementById('btn-logs-prev');
+    const btnNext = document.getElementById('btn-logs-next');
+
+    if (total === 0) {
+      info.textContent = 'Showing 0-0 of 0 logs';
+      btnPrev.disabled = true;
+      btnNext.disabled = true;
+      return;
+    }
+
+    const start = offset + 1;
+    const end = Math.min(offset + count, total);
+    info.textContent = `Showing ${start}-${end} of ${total} logs`;
+    btnPrev.disabled = offset <= 0;
+    btnNext.disabled = end >= total;
+  }
+
+  function changeLogsPage(direction) {
+    const newOffset = currentLogsOffset + (direction * currentLogsLimit);
+    if (newOffset < 0) return;
+    loadAttackLogs(currentIncidentId, newOffset, currentLogsSeverity);
+  }
+
+  // ===========================================================================
+  // SECTION: POSSIBLE NEXT PATHS
+  // ===========================================================================
+
+  async function loadNextPaths(incId) {
+    if (!incId) return;
+    const container = document.getElementById('next-paths-container');
+    try {
+      const res = await fetch(`/api/v1/incidents/${incId}/next-paths`);
+      if (!res.ok) {
+        container.innerHTML = `<div class="card-prose" style="font-size:0.78rem;color:var(--text-muted);padding:0.5rem;background:#101524;border-radius:6px;">No predictive paths available for this incident.</div>`;
+        return;
+      }
+      const data = await res.json();
+      renderNextPaths(data);
+    } catch (err) {
+      console.error('Failed loading next paths:', err);
+      container.innerHTML = `<div class="card-prose" style="font-size:0.78rem;color:var(--danger);padding:0.5rem;">Failed to load next paths: ${escapeHtml(err.message)}</div>`;
+    }
+  }
+
+  function renderNextPaths(data) {
+    const container = document.getElementById('next-paths-container');
+    if (!data || !data.paths || data.paths.length === 0) {
+      const reasonText = data && data.reason ? data.reason : 'No further sensitive lateral paths detected in current network telemetry.';
+      container.innerHTML = `
+        <div class="card-prose" style="font-size:0.78rem;color:var(--text-muted);padding:0.6rem;background:#101524;border-radius:6px;border:1px dashed var(--border);line-height:1.45;">
+          ${escapeHtml(reasonText)}
+        </div>
+      `;
+      return;
+    }
+
+    const confClasses = {
+      high: 'pill-red',
+      medium: 'pill-amber',
+      low: 'pill-blue'
+    };
+
+    container.innerHTML = data.paths.slice(0, 3).map(p => {
+      const likelihoodPct = Math.round((p.likelihood || 0) * 100);
+      const conf = (p.confidence || 'medium').toLowerCase();
+      const confClass = confClasses[conf] || 'pill-amber';
+      const servStr = p.service ? `${p.service}${p.port ? ' (' + p.port + ')' : ''}` : `Port ${p.port || 'Unknown'}`;
+
+      return `
+        <div class="next-path-card-item" style="background:#141a29;border:1px solid var(--border);border-left:3px solid #ef4444;border-radius:6px;padding:0.75rem;display:flex;flex-direction:column;gap:0.45rem;">
+          <div style="display:flex;justify-content:space-between;align-items:center;gap:0.4rem;">
+            <div style="display:flex;align-items:center;gap:0.4rem;">
+              <span class="pill pill-red" style="font-weight:800;font-size:0.68rem;">#${p.rank || 1}</span>
+              <span style="font-weight:700;font-size:0.82rem;color:#f8fafc;">${escapeHtml(servStr)}</span>
+            </div>
+            <span class="pill ${confClass}" style="font-size:0.68rem;text-transform:uppercase;">${escapeHtml(conf)} confidence</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.76rem;color:#cbd5e1;font-family:monospace;background:#0d111c;padding:0.35rem 0.6rem;border-radius:4px;border:1px solid #1f273d;">
+            <span style="color:#60a5fa;">${escapeHtml(p.from_entity || '-')}</span>
+            <span style="color:#ef4444;font-weight:bold;">&rarr;</span>
+            <span style="color:#f87171;">${escapeHtml(p.to_entity || '-')}</span>
+          </div>
+
+          <div style="display:flex;align-items:center;gap:0.5rem;font-size:0.72rem;margin-top:0.1rem;">
+            <span style="color:var(--text-muted);">Likelihood:</span>
+            <div style="flex:1;background:#090d16;height:6px;border-radius:3px;overflow:hidden;border:1px solid #1f273d;">
+              <div style="width:${likelihoodPct}%;background:#ef4444;height:100%;"></div>
+            </div>
+            <span style="font-weight:700;color:#fca5a5;">${likelihoodPct}%</span>
+          </div>
+
+          ${p.monitor_or_block ? `
+            <div style="background:#090c14;border:1px solid #1f273d;border-radius:4px;padding:0.35rem 0.55rem;font-size:0.72rem;color:#cbd5e1;display:flex;align-items:center;justify-content:space-between;gap:0.4rem;margin-top:0.2rem;">
+              <span><strong style="color:#fbbf24;">Action:</strong> ${escapeHtml(p.monitor_or_block)}</span>
+              <button class="copy-btn" onclick="copyToClipboard('${escapeHtml(p.monitor_or_block.replace(/'/g, "\\'"))}')">Copy</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }).join('');
+  }
+
+  // ===========================================================================
+  // SECTION: EVALUATION STATUS
+  // ===========================================================================
+
+  async function loadEvaluationStatus() {
+    const pill = document.getElementById('pill-evaluation');
+    if (!pill) return;
+
+    try {
+      const res = await fetch('/api/v1/evaluate/latest');
+      if (!res.ok) throw new Error('Not available');
+      const data = await res.json();
+
+      if (data && data.kind === 'silver') {
+        const recall = data.behavior_recall != null ? (data.behavior_recall * 100).toFixed(1) : (data.row_recall != null ? (data.row_recall * 100).toFixed(1) : '0.0');
+        const agreement = data.exact_label_agreement != null ? (data.exact_label_agreement * 100).toFixed(1) : (data.precision_proxy != null ? (data.precision_proxy * 100).toFixed(1) : '0.0');
+        pill.textContent = `Silver Recall: ${recall}% | Agreement: ${agreement}%`;
+        pill.title = data.caveat || 'silver: agreement with SQL oracles, not accuracy';
+        pill.className = 'pill pill-amber';
+      } else {
+        pill.textContent = 'Evaluator: Not measured';
+        pill.title = 'No silver or ground truth evaluation recorded';
+        pill.className = 'pill';
+      }
+    } catch (_) {
+      pill.textContent = 'Evaluator: Not measured';
+      pill.title = 'Evaluation metrics unavailable';
+      pill.className = 'pill';
+    }
+  }
+
+  // Evidence Drawer operations
+  async function openEvidenceDrawer(event, eventId) {
+    event.stopPropagation();
+    document.getElementById('evidence-target-id').textContent = eventId;
+    const drawer = document.getElementById('evidence-drawer');
+    drawer.classList.add('open');
+
+    const tbody = document.getElementById('evidence-table-body');
+    tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;">Fetching telemetry for event...</td></tr>';
+
+    try {
+      const res = await fetch(`/api/v1/incidents/${currentIncidentId}/events?ids=${eventId}`);
+      if (!res.ok) throw new Error('Failed to query events');
+      const events = await res.json();
+
+      if (!events || events.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#94a3b8;">No raw event telemetry found for this ID.</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = events.map(ev => `
+        <tr>
+          <td style="color:#60a5fa;font-weight:700;">${escapeHtml(ev.event_id || eventId)}</td>
+          <td>${escapeHtml(ev.timestamp || ev.ts || '-')}</td>
+          <td>${escapeHtml(ev.src_ip || '-')}:${escapeHtml(ev.src_port || '-')}</td>
+          <td>${escapeHtml(ev.dst_ip || '-')}:${escapeHtml(ev.dst_port || '-')}</td>
+          <td>${escapeHtml(ev.service || ev.proto || '-')}</td>
+          <td><span class="pill" style="font-size:0.65rem;">${escapeHtml(ev.action || ev.status || '-')}</span></td>
+          <td style="color:#cbd5e1;">${escapeHtml(ev.logdesc || ev.attack || ev.msg || '-')}</td>
+        </tr>
+      `).join('');
+    } catch (e) {
+      tbody.innerHTML = `<tr><td colspan="7" style="color:#ef4444;text-align:center;">Failed to load event telemetry: ${escapeHtml(e.message)}</td></tr>`;
+    }
+  }
+
+  function closeEvidenceDrawer() {
+    document.getElementById('evidence-drawer').classList.remove('open');
+  }
+
+  function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+      const toast = document.getElementById('toast');
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }).catch(err => {
+      console.error('Copy failed:', err);
+    });
+  }
+
+  // Toolbar event listeners
+  document.getElementById('btn-fit').addEventListener('click', () => {
+    if (cy) cy.fit(undefined, 30);
+  });
+  document.getElementById('btn-relayout').addEventListener('click', () => {
+    applyDagreLayout();
+  });
+
+  document.getElementById('btn-regenerate').addEventListener('click', async () => {
+    const btn = document.getElementById('btn-regenerate');
+    btn.innerHTML = '<span class="spinner"></span> Generating AI story...';
+    btn.disabled = true;
+    try {
+      await loadStory(currentIncidentId, true);
+    } finally {
+      btn.innerHTML = '⚡ Generate AI story';
+      btn.disabled = false;
+    }
+  });
+
+  // Replay scrubber animation
+  document.getElementById('btn-replay').addEventListener('click', () => {
+    if (replayTimer) {
+      clearInterval(replayTimer);
+      replayTimer = null;
+      document.getElementById('btn-replay').textContent = '▶ Play Scrubber';
+      return;
+    }
+
+    const totalSteps = (currentIncident && currentIncident.steps) ? currentIncident.steps.length : (currentStory ? currentStory.steps.length : 0);
+    if (totalSteps === 0) return;
+
+    document.getElementById('btn-replay').textContent = '⏹ Stop Scrubber';
+    let stepIdx = 1;
+
+    highlightStep(stepIdx);
+    replayTimer = setInterval(() => {
+      stepIdx++;
+      if (stepIdx > totalSteps) {
+        stepIdx = 0;
+        highlightStep(0);
+        clearInterval(replayTimer);
+        replayTimer = null;
+        document.getElementById('btn-replay').textContent = '▶ Play Scrubber';
+      } else {
+        highlightStep(stepIdx);
+      }
+    }, 1800);
+  });
+
+  // ===========================================================================
+  // SECTION: PATTERNS TAB & MANAGEMENT
+  // ===========================================================================
+
+  function switchMainTab(tab) {
+    const graphWorkspace = document.getElementById('app-workspace');
+    const patternsWorkspace = document.getElementById('patterns-workspace');
+    const btnGraph = document.getElementById('tab-graph');
+    const btnPatterns = document.getElementById('tab-patterns');
+
+    if (tab === 'patterns') {
+      graphWorkspace.style.display = 'none';
+      patternsWorkspace.style.display = 'flex';
+      btnPatterns.classList.add('btn-primary');
+      btnGraph.classList.remove('btn-primary');
+      loadPatterns();
+    } else {
+      patternsWorkspace.style.display = 'none';
+      graphWorkspace.style.display = 'flex';
+      btnGraph.classList.add('btn-primary');
+      btnPatterns.classList.remove('btn-primary');
+      if (cy) {
+        cy.resize();
+        cy.fit(undefined, 30);
+      }
+    }
+  }
+
+  async function loadPatterns() {
+    const kind = document.getElementById('pattern-kind-filter').value;
+    const status = document.getElementById('pattern-status-filter').value;
+    let url = '/api/v1/patterns?limit=200';
+    if (kind) url += `&kind=${encodeURIComponent(kind)}`;
+    if (status) url += `&status=${encodeURIComponent(status)}`;
+
+    const tbody = document.getElementById('patterns-table-body');
+    const badge = document.getElementById('patterns-count-badge');
+
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+      const data = await resp.json();
+      badge.textContent = `${data.total || 0} Patterns`;
+
+      if (!data.items || data.items.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="8" style="text-align:center;padding:3rem 1rem;color:var(--text-muted);">
+              <div style="font-size:0.95rem;font-weight:600;margin-bottom:0.5rem;color:#cbd5e1;">
+                No patterns yet &mdash; run discovery (about 2 minutes)
+              </div>
+              <button class="btn btn-primary" onclick="runPatternDiscovery()" style="font-size:0.8rem;margin-top:0.4rem;">
+                ⚡ Run discovery
+              </button>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tbody.innerHTML = data.items.map(p => {
+        const statusClass = p.status === 'approved' ? 'pill-green' : (p.status === 'rejected' ? 'pill-red' : 'pill-blue');
+        const scoreColor = p.score >= 8.5 ? '#f87171' : (p.score >= 6.0 ? '#fbbf24' : '#34d399');
+        const techStr = p.suggested_technique ? `${p.suggested_technique} (${p.suggested_tactic || ''})` : '-';
+        const ents = (p.entities || []).slice(0, 3).join(', ') || '-';
+
+        return `
+          <tr>
+            <td style="font-weight:700;color:${scoreColor};">${p.score != null ? p.score.toFixed(1) : '-'}</td>
+            <td><span class="pill pill-blue">${escapeHtml(p.kind)}</span></td>
+            <td><span class="pill ${statusClass}">${escapeHtml(p.status)}</span></td>
+            <td style="font-weight:500;">${escapeHtml(p.title)}</td>
+            <td style="font-family:monospace;">${p.support != null ? p.support : '-'}</td>
+            <td style="font-size:0.75rem;color:#fbbf24;">${escapeHtml(techStr)}</td>
+            <td style="font-size:0.75rem;color:var(--text-muted);font-family:monospace;">${escapeHtml(ents)}</td>
+            <td>
+              <div style="display:flex;gap:0.3rem;">
+                <button class="btn" style="padding:0.2rem 0.5rem;font-size:0.7rem;background:#065f46;" onclick="handleApprovePattern('${p.pattern_id}')">Approve</button>
+                <button class="btn" style="padding:0.2rem 0.5rem;font-size:0.7rem;background:#991b1b;" onclick="handleRejectPattern('${p.pattern_id}')">Reject</button>
+                <button class="btn" style="padding:0.2rem 0.5rem;font-size:0.7rem;" onclick="viewPatternInGraph('${p.pattern_id}')">Graph</button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    } catch (err) {
+      tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:2rem;color:var(--danger);">Failed to load patterns: ${escapeHtml(err.message)}</td></tr>`;
+    }
+  }
+
+  function filterPatterns() {
+    loadPatterns();
+  }
+
+  async function runPatternDiscovery() {
+    const btn = document.getElementById('btn-run-discovery');
+    const statusPill = document.getElementById('discovery-job-status');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span> Running discovery...';
+    statusPill.style.display = 'inline-flex';
+    statusPill.textContent = 'Starting pattern mining...';
+    statusPill.className = 'pill pill-amber';
+
+    try {
+      const res = await fetch('/api/v1/patterns/mine', { method: 'POST' });
+      if (!res.ok) {
+        throw new Error(`HTTP ${res.status}`);
+      }
+      const data = await res.json();
+      const jobId = data.job_id;
+      statusPill.textContent = `Job queued: ${jobId}`;
+
+      if (discoveryPollInterval) clearInterval(discoveryPollInterval);
+      discoveryPollInterval = setInterval(async () => {
+        try {
+          const jRes = await fetch(`/api/v1/jobs/${jobId}`);
+          if (!jRes.ok) return;
+          const job = await jRes.json();
+          if (job.status === 'running') {
+            const pct = job.progress_pct ? ` (${job.progress_pct.toFixed(0)}%)` : '';
+            statusPill.textContent = `Mining patterns...${pct}`;
+          } else if (job.status === 'done') {
+            clearInterval(discoveryPollInterval);
+            discoveryPollInterval = null;
+            statusPill.textContent = 'Discovery completed!';
+            statusPill.className = 'pill pill-green';
+            btn.disabled = false;
+            btn.innerHTML = '⚡ Run discovery';
+            loadPatterns();
+            setTimeout(() => { statusPill.style.display = 'none'; }, 6000);
+          } else if (job.status === 'failed') {
+            clearInterval(discoveryPollInterval);
+            discoveryPollInterval = null;
+            statusPill.textContent = `Mining failed: ${job.error || 'unknown'}`;
+            statusPill.className = 'pill pill-red';
+            btn.disabled = false;
+            btn.innerHTML = '⚡ Run discovery';
+          }
+        } catch (e) {
+          console.error('Job polling error:', e);
+        }
+      }, 2000);
+    } catch (err) {
+      statusPill.textContent = `Failed to trigger discovery: ${err.message}`;
+      statusPill.className = 'pill pill-red';
+      btn.disabled = false;
+      btn.innerHTML = '⚡ Run discovery';
+    }
+  }
+
+  async function handleApprovePattern(pid) {
+    try {
+      const resp = await fetch(`/api/v1/patterns/${pid}/approve`, { method: 'POST' });
+      if (resp.ok) loadPatterns();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  async function handleRejectPattern(pid) {
+    try {
+      const resp = await fetch(`/api/v1/patterns/${pid}/reject`, { method: 'POST' });
+      if (resp.ok) loadPatterns();
+    } catch (err) {
+      console.error(err);
+    }
+  }
+
+  function viewPatternInGraph(pid) {
+    switchMainTab('graph');
+  }
+
+  function downloadExport(fmt) {
+    window.open(`/api/v1/patterns/export/${fmt}`, '_blank');
+  }
+
+  // ===========================================================================
+  // SECTION: INITIALIZATION
+  // ===========================================================================
+
+  window.addEventListener('DOMContentLoaded', () => {
+    initCytoscape();
+    renderGraphLegend();
+
+    // Incident Select change listener attached STRICTLY ONCE
+    const incSelect = document.getElementById('incidentSelect');
+    incSelect.addEventListener('change', (e) => {
+      currentIncidentId = e.target.value;
+      loadIncidentData(currentIncidentId);
+    });
+
+    loadIncidents();
+    loadEvaluationStatus();
+  });
 </script>
 </body>
 </html>
-

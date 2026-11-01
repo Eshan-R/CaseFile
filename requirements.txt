@@ -12,3 +12,5 @@ pyarrow>=16
 pytest>=8.3
 pytest-asyncio>=0.23
 ruff>=0.6
+psutil>=5.9.0
+google-genai>=2.0.0

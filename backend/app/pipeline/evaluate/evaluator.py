@@ -88,7 +88,11 @@ def load_and_verify_manifest(
     declared_bytes = manifest.get("bytes")
     if log_file_size is not None and declared_bytes is not None:
         if log_file_size != declared_bytes:
-            print("MANIFEST DOES NOT MATCH THIS FILE")
+            print(
+                f"[!] ERROR: MANIFEST DOES NOT MATCH THIS FILE\n"
+                f"    Actual log size : {log_file_size:,} bytes\n"
+                f"    Manifest bytes  : {declared_bytes:,} bytes"
+            )
             sys.exit(3)
 
     return manifest
@@ -358,6 +362,77 @@ def evaluate_manifest(
         p50_latency = round(path_latencies_ms[idx_50], 2)
         p95_latency = round(path_latencies_ms[idx_95], 2)
 
+    # Pattern Discovery Evaluation against Planted Incidents (evaluator-only)
+    total_patterns, all_patterns = duck.list_patterns(limit=None)
+    covered_planted_incidents = 0
+    matched_pattern_ids = set()
+
+    if total_patterns > 0 and planted_incidents:
+        planted_inc_events: list[set[str]] = []
+        all_planted_eids: set[str] = set()
+        for p_inc in planted_incidents:
+            at_triples = p_inc.get("at", [])
+            p_eids = {f"ev_{triple[2]}_{triple[1]}" for triple in at_triples if len(triple) >= 3}
+            planted_inc_events.append(p_eids)
+            all_planted_eids.update(p_eids)
+
+        for p in all_patterns:
+            p_id = p.get("pattern_id")
+            sample_eids = set(p.get("example_event_ids") or [])
+            entities = p.get("entities") or []
+            ent_vals = [e.split(":", 1)[1] for e in entities if ":" in e]
+
+            if sample_eids & all_planted_eids:
+                matched_pattern_ids.add(p_id)
+                continue
+
+            if ent_vals:
+                placeholders = ", ".join(["?" for _ in ent_vals])
+                try:
+                    with duck.cursor() as con:
+                        match_row = con.execute(
+                            f"SELECT COUNT(*) FROM events WHERE (src_ip IN ({placeholders}) OR dst_ip IN ({placeholders})) AND event_id IN (SELECT unnest(?::VARCHAR[]))",
+                            [*ent_vals, *ent_vals, list(all_planted_eids)],
+                        ).fetchone()
+                        if match_row and match_row[0] > 0:
+                            matched_pattern_ids.add(p_id)
+                except Exception:
+                    pass
+
+        for p_eids in planted_inc_events:
+            if not p_eids:
+                continue
+            is_cov = False
+            for p in all_patterns:
+                p_id = p.get("pattern_id")
+                if p_id in matched_pattern_ids:
+                    sample_eids = set(p.get("example_event_ids") or [])
+                    if sample_eids & p_eids:
+                        is_cov = True
+                        break
+                    ent_vals = [e.split(":", 1)[1] for e in (p.get("entities") or []) if ":" in e]
+                    if ent_vals:
+                        placeholders = ", ".join(["?" for _ in ent_vals])
+                        try:
+                            with duck.cursor() as con:
+                                match_row = con.execute(
+                                    f"SELECT COUNT(*) FROM events WHERE (src_ip IN ({placeholders}) OR dst_ip IN ({placeholders})) AND event_id IN (SELECT unnest(?::VARCHAR[]))",
+                                    [*ent_vals, *ent_vals, list(p_eids)],
+                                ).fetchone()
+                                if match_row and match_row[0] > 0:
+                                    is_cov = True
+                                    break
+                        except Exception:
+                            pass
+            if is_cov:
+                covered_planted_incidents += 1
+
+        pattern_coverage_rate = (covered_planted_incidents / total_planted_incidents) if total_planted_incidents else None
+        unmatched_pattern_ratio = ((total_patterns - len(matched_pattern_ids)) / total_patterns) if total_patterns else None
+    else:
+        pattern_coverage_rate = None
+        unmatched_pattern_ratio = None
+
     # Missed incidents
     missed_incidents = [res for res in incident_results if not res["hit"]]
 
@@ -376,6 +451,8 @@ def evaluate_manifest(
         "false_alarm_count": false_alarm_incidents_count,
         "total_our_incidents": total_our_incidents,
         "total_our_detections": total_our_detections,
+        "planted_incident_pattern_coverage": pattern_coverage_rate,
+        "unmatched_pattern_ratio": unmatched_pattern_ratio,
         "processing_seconds": processing_seconds,
         "peak_memory_mb": None,
         "path_open_ms": {"p50": p50_latency, "p95": p95_latency} if p50_latency is not None else None,

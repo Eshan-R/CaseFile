@@ -6,6 +6,7 @@ date=2026-10-23 time=08:48:26 eventtime=1792745306564464000 tz="+0530" devname="
 
 from __future__ import annotations
 
+import functools
 import json
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -114,6 +115,25 @@ def parse_tz_offset_seconds(tz_str: str) -> int:
     return 0
 
 
+@functools.lru_cache(maxsize=8192)
+def format_iso8601(date_str: str, time_str: str | None, tz_str: str) -> str | None:
+    """Parse date, time, and timezone offset into UTC ISO-8601 string, cached via LRU."""
+    try:
+        offset_sec = parse_tz_offset_seconds(tz_str)
+        y = int(date_str[:4])
+        m = int(date_str[5:7])
+        d = int(date_str[8:10])
+        t_str = time_str or "00:00:00"
+        hh = int(t_str[:2])
+        mm = int(t_str[3:5])
+        ss = int(t_str[6:8])
+        dt_local = datetime(y, m, d, hh, mm, ss)
+        dt_utc = dt_local - timedelta(seconds=offset_sec)
+        return dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+    except Exception:
+        return None
+
+
 def determine_outcome(kv: dict[str, str]) -> str:
     """Determine outcome from status, reason, action, or logid."""
     status = kv.get("status")
@@ -142,9 +162,10 @@ def parse_kv(line: str) -> dict[str, str]:
     i = 0
     n = len(line)
     kv: dict[str, str] = {}
+    has_tab = "\t" in line
 
     while i < n:
-        while i < n and (line[i] == " " or line[i] == "\t" or line[i] == "\r" or line[i] == "\n"):
+        while i < n and line[i] in " \t\r\n":
             i += 1
         if i >= n:
             break
@@ -176,14 +197,18 @@ def parse_kv(line: str) -> dict[str, str]:
                 val = val.replace('\\"', '"').replace("\\\\", "\\")
         else:
             space_pos = line.find(" ", val_start)
-            tab_pos = line.find("\t", val_start)
-            delim = -1
-            if space_pos != -1 and tab_pos != -1:
-                delim = min(space_pos, tab_pos)
-            elif space_pos != -1:
+            if has_tab:
+                tab_pos = line.find("\t", val_start)
+                if space_pos != -1 and tab_pos != -1:
+                    delim = min(space_pos, tab_pos)
+                elif space_pos != -1:
+                    delim = space_pos
+                elif tab_pos != -1:
+                    delim = tab_pos
+                else:
+                    delim = -1
+            else:
                 delim = space_pos
-            elif tab_pos != -1:
-                delim = tab_pos
 
             if delim == -1:
                 val = line[val_start:].rstrip("\r\n")
@@ -219,20 +244,8 @@ def parse_line(
         return None
 
     tz_val = kv.get("tz", "+0000")
-    offset_sec = parse_tz_offset_seconds(tz_val)
-
-    try:
-        y = int(date_val[:4])
-        m = int(date_val[5:7])
-        d = int(date_val[8:10])
-        t_str = time_val or "00:00:00"
-        hh = int(t_str[:2])
-        mm = int(t_str[3:5])
-        ss = int(t_str[6:8])
-        dt_local = datetime(y, m, d, hh, mm, ss)
-        dt_utc = dt_local - timedelta(seconds=offset_sec)
-        timestamp_str = dt_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
-    except Exception:
+    timestamp_str = format_iso8601(date_val, time_val, tz_val)
+    if timestamp_str is None:
         return None
 
     eventtime_ns: int | None = None

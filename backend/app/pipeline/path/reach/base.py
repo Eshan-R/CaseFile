@@ -37,3 +37,4 @@ class ReachEngine(ABC):
             NextReach instance with blast radius, predicted paths, and reachable targets.
         """
         pass
+

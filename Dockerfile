@@ -8,9 +8,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ ./backend/
 COPY rules/ ./rules/
 COPY knowledge/ ./knowledge/
+COPY scripts/ ./scripts/
 
 ENV PYTHONPATH=/app/backend
-WORKDIR /app/backend
+WORKDIR /app
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
+CMD ["uvicorn", "app.main:app", "--app-dir", "backend", "--host", "0.0.0.0", "--port", "8000"]

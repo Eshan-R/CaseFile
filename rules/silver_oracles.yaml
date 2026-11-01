@@ -1,0 +1,176 @@
+# CaseFile Silver-Standard Independent SQL Oracles
+# Defines independent SQL telemetry oracles over FortiGate log events.
+# These oracles act as a silver-standard answer key for unlabelled datasets (e.g. firex-10G.log).
+# Agreement with these oracles reflects method agreement, NOT ground truth accuracy.
+
+oracles:
+  - id: failed_admin_burst
+    name: Failed Admin Authentication Burst
+    technique: T1110.001
+    tactic: Credential Access
+    description: High-velocity password guessing attacks against administrative interfaces.
+    window_seconds: 600 # 10 minutes
+    # Why 500: Normal human users fail at most 3-5 times. An automated brute-force scanner
+    # easily generates 500+ failures within a 10-minute window against admin services.
+    min_count: 500
+    # Population guard: Any window with >= 10 distinct sources tripping indicates a broadcast/sensor
+    # artifact rather than a targeted brute force campaign and is suppressed.
+    max_distinct_sources: 10
+    logid: "0100032002"
+
+  - id: slow_stuffing_24
+    name: Distributed Slow Credential Stuffing (/24 Subnet)
+    technique: T1110.004
+    tactic: Credential Access
+    description: Low-and-slow credential stuffing rotated across an entire /24 IP subnet with regular cadence.
+    window_seconds: 21600 # 6 hours
+    # Why 10 IPs & regular inter-arrival: A distributed credential stuffing campaign uses distinct bot IPs
+    # to evade single-IP rate limits while maintaining a slow, regular cadence (120-480s between attempts).
+    # Volume cap (<= 200 events) suppresses massive uniform background noise (e.g. 45.74.28.0/24).
+    min_distinct_ips: 10
+    max_events: 200
+    min_delta_seconds: 120
+    max_delta_seconds: 480
+    max_single_ip_count: 50
+    logid: "0100032002"
+
+  - id: admin_success
+    name: Administrative Login Success (with context flags)
+    technique: T1078.001
+    tactic: Initial Access
+    description: Successful administrative logins, flagged for odd hours or post-brute-force compromise.
+    logid: "0100032001"
+    # Why 5: Even a few failed attempts prior to success indicates potential guessing/compromise.
+    prior_failure_window_minutes: 30
+    min_prior_failures: 5
+    # Odd hour threshold: Logins before 06:00 local wall clock (+05:30) from external IPs.
+    odd_hour_cutoff: 6
+
+  - id: vpn_impossible_travel
+    name: Impossible Geographic Travel (VPN)
+    technique: T1078.004
+    tactic: Initial Access
+    description: Simultaneous or near-simultaneous VPN sessions for the same user from distinct countries.
+    window_seconds: 3600 # 60 minutes
+    # Why 60 minutes: Physical travel between distinct sovereign countries within 60 minutes is
+    # physically impossible without credential theft, proxy routing, or session hijacking.
+    actions:
+      - tunnel-up
+      - ssl-login
+
+  - id: config_change
+    name: Critical Security Configuration & Account Tampering
+    technique: T1562.002
+    tactic: Defense Evasion
+    description: Disabling logging/security policies, creating backdoor admin accounts, or rapid rogue admin deletion.
+    # Why rare logids: 0100044546 (Edit settings) and 0100044547 (Add/Delete admin accounts)
+    # represent infrequent, high-privilege configuration modifications.
+    rogue_admin_window_minutes: 60
+    logids:
+      - "0100044546"
+      - "0100044547"
+
+  - id: virus_detected_not_blocked
+    name: Antivirus Detection Permitted / Unblocked
+    technique: T1105
+    tactic: Command and Control
+    description: Malicious payload or malware signature recognized by UTM AV but not dropped/quarantined.
+    # Why not blocked: Unblocked virus delivery represents immediate active compromise of the endpoint.
+    target_action_not: blocked
+
+  - id: port_scan
+    name: High-Volume Port Scan
+    technique: T1046
+    tactic: Discovery
+    description: Systematic network scanning sweeping across multiple listening ports.
+    window_seconds: 300 # 5 minutes
+    # Why 200 ports: Benign multi-connection applications rarely touch > 10-20 distinct ports.
+    # 200 ports in 5 minutes indicates an aggressive SYN/connect port scanner (e.g. Nmap).
+    min_distinct_ports: 200
+    # Population guard: Suppress if >= 30% of active internal hosts trip the same condition.
+    population_guard_ratio: 0.30
+
+  - id: lateral_fanout
+    name: Internal Lateral Movement Fanout (SMB/RDP)
+    technique: T1021.002
+    tactic: Lateral Movement
+    description: An internal workstation or server fanning out connections to multiple internal hosts on sensitive ports.
+    window_seconds: 3600 # 1 hour
+    # Why 10 hosts on 445/3389: Normal endpoints communicate with a few file shares or servers.
+    # Contacting 10+ internal machines via SMB/RDP indicates lateral propagation or worming.
+    ports:
+      - 445
+      - 3389
+    min_distinct_targets: 10
+
+  - id: dns_tunnel
+    name: DNS Tunneling / Data Staging
+    technique: T1071.004
+    tactic: Command and Control
+    description: Encoded subdomains used for C2 signaling or covert exfiltration over DNS.
+    # Why 32 chars: Standard hostname labels are short words; Base64/Hex encoded data chunks
+    # typically exceed 32 characters per label.
+    min_first_label_length: 32
+    # Why 50 distinct queries per domain: Sustained C2 communication or exfiltration emits dozens
+    # of unique high-entropy subdomains under a single apex domain.
+    min_distinct_names: 50
+
+  - id: beacon
+    name: Periodic C2 Beaconing
+    technique: T1071.001
+    tactic: Command and Control
+    description: Regular, automated HTTP/HTTPS heartbeat connections to external infrastructure.
+    min_duration_seconds: 21600 # 6 hours
+    min_count: 100
+    # Why CV <= 0.15: Automated timers exhibit low variance in inter-arrival intervals and payload size.
+    max_cv_interval: 0.15
+    max_cv_bytes: 0.15
+
+  - id: staged_exfil
+    name: Sustained Asymmetric Outbound Exfiltration
+    technique: T1048.002
+    tactic: Exfiltration
+    description: Asymmetric data transfer where internal host pushes significantly more data out than it receives.
+    min_duration_seconds: 86400 # 24 hours
+    min_count: 500
+    # Why ratio >= 1.5: Normal web traffic is highly downstream-heavy (downloading HTML/media).
+    # Uploading 1.5x more bytes than received over 24 hours indicates exfiltration or staging.
+    min_sent_rcvd_ratio: 1.5
+
+  - id: web_payload
+    name: Inbound Web Application Attack Payloads
+    technique: T1190
+    tactic: Initial Access
+    description: Malicious SQL injection, XSS, directory traversal, or command injection strings in HTTP requests.
+    window_seconds: 600 # 10 minutes
+    # Why 10 requests: Single anomalous requests could be fuzzing or benign syntax; >= 10 indicates
+    # an active exploitation attempt against web services.
+    min_count: 10
+    classes:
+      sqli:
+        technique: T1190
+        sub_technique: T1595.002
+        tactic: Initial Access
+      xss:
+        technique: T1059.007
+        tactic: Execution
+      traversal:
+        technique: T1083
+        tactic: Discovery
+      cmd_injection:
+        technique: T1059.004
+        tactic: Execution
+
+  - id: flood
+    name: Distributed & Volumetric Flooding Attacks
+    technique: T1498.001
+    tactic: Impact
+    description: Volumetric denial of service targeting internal destinations (SYN, HTTP, or DNS amplification).
+    window_seconds: 60 # 1 minute
+    syn_flood_min_events: 2000
+    http_flood_min_events: 1000
+    http_flood_min_sources: 100
+    dns_amp_min_events: 500
+    dns_amp_min_avg_bytes: 1000
+    population_guard_ratio: 0.30
+

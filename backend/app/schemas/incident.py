@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Any
 
 from pydantic import BaseModel, Field
 
@@ -17,6 +18,8 @@ class AttackStep(BaseModel):
     first_seen: datetime
     last_seen: datetime
     hosts: list[str]
+    kill_chain_stage: str = ""
+    count: int = 1
 
 
 class Incident(BaseModel):
@@ -25,6 +28,7 @@ class Incident(BaseModel):
     incident_id: str  # inc_<8hex>
     title: str
     severity: int = Field(ge=1, le=10)
+    risk_score: float = 0.0
     first_seen: datetime
     last_seen: datetime
     hosts: list[str] = Field(default_factory=list)
@@ -33,8 +37,10 @@ class Incident(BaseModel):
     techniques: list[str] = Field(default_factory=list)  # ordered kill chain
     steps: list[AttackStep] = Field(default_factory=list)
     detection_ids: list[str] = Field(default_factory=list)
+    detection_count: int = 0
     event_count: int = 0
-    status: str = "open"  # "open" | "closed"
+    status: str = "open"  # "open" | "closed" | "alert" | "lead"
+    ips_context: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class IncidentList(BaseModel):

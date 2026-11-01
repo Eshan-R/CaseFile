@@ -11,9 +11,19 @@ from app.pipeline.path.reach.engine import compute_reach, get_or_compute_reach, 
 from app.pipeline.path.reach.neo4j_engine import Neo4jEngine
 from app.pipeline.path.reach.networkx_engine import NetworkXEngine
 from app.pipeline.path.reach.service import (
+    clear_predicted_paths_cache,
     extract_access_edges_from_events,
+    get_predicted_next_paths,
+    inject_predicted_paths_into_cytoscape,
     precompute_all_incidents,
     precompute_reach_for_incident,
+    predict_next_paths,
+)
+from app.schemas.next_paths import (
+    DEFAULT_NEXT_PATHS_DISCLAIMER,
+    NextPathEvidence,
+    NextPathsResponse,
+    PredictedPathItem,
 )
 from app.schemas.reach import (
     DEFAULT_DISCLAIMER,
@@ -25,18 +35,26 @@ from app.schemas.reach import (
 
 __all__ = [
     "DEFAULT_DISCLAIMER",
+    "DEFAULT_NEXT_PATHS_DISCLAIMER",
     "BlastRadius",
     "Neo4jEngine",
     "NetworkXEngine",
+    "NextPathEvidence",
+    "NextPathsResponse",
     "NextReach",
     "NotConfigured",
     "PredictedPath",
+    "PredictedPathItem",
     "ReachEngine",
     "ReachableTarget",
+    "clear_predicted_paths_cache",
     "compute_reach",
     "extract_access_edges_from_events",
     "get_or_compute_reach",
+    "get_predicted_next_paths",
     "get_reach_engine",
+    "inject_predicted_paths_into_cytoscape",
     "precompute_all_incidents",
     "precompute_reach_for_incident",
+    "predict_next_paths",
 ]

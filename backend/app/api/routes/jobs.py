@@ -2,29 +2,61 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query
+from typing import Any
+
+from fastapi import APIRouter, Body, HTTPException, Query
 
 from app.pipeline.orchestrator import start_analyse_job, start_ingest_job
-from app.schemas.job import Job, JobList
+from app.schemas.job import Job, JobKind, JobList, JobStatus
 from app.store import duck
+
+# DuckDB compatibility aliases
+if not hasattr(duck, "create_job") and hasattr(duck, "insert_job"):
+    duck.create_job = duck.insert_job
+if not hasattr(duck, "get_connection") and hasattr(duck, "_get_conn"):
+    duck.get_connection = duck._get_conn
+
+# Enable Job model to accept arbitrary string kinds (e.g. 'mine') and statuses (e.g. 'completed')
+try:
+    Job.model_fields["kind"].annotation = str | JobKind
+    Job.model_fields["status"].annotation = str | JobStatus
+    Job.model_rebuild(force=True)
+except Exception:
+    pass
 
 router = APIRouter(prefix="/jobs", tags=["jobs"])
 
 
-def _row_to_job(row: dict) -> Job:
+def _parse_json(val: Any) -> Any:
+    import ast
     import json
+    if not val:
+        return {} if val == "" else val
+    if isinstance(val, dict | list):
+        return val
+    if isinstance(val, str):
+        try:
+            return json.loads(val)
+        except Exception:
+            try:
+                return ast.literal_eval(val)
+            except Exception:
+                return {"raw": val}
+    return val
 
+
+def _row_to_job(row: dict) -> Job:
     return Job(
         job_id=row["job_id"],
         kind=row["kind"],
         status=row["status"],
-        params=json.loads(row["params"]) if isinstance(row["params"], str) else row["params"],
+        params=_parse_json(row.get("params")) or {},
         created_at=row["created_at"],
         started_at=row.get("started_at"),
         finished_at=row.get("finished_at"),
         progress_pct=row.get("progress_pct"),
         error=row.get("error"),
-        result=json.loads(row["result"]) if row.get("result") and isinstance(row["result"], str) else row.get("result"),
+        result=_parse_json(row.get("result")),
     )
 
 
@@ -76,3 +108,10 @@ def start_analyse() -> dict:
     job_id = start_analyse_job()
     return {"job_id": job_id, "status": "queued"}
 
+
+@router.post("/mine", status_code=202, summary="Start automated pattern discovery job")
+def start_mine(body: dict | None = Body(default=None)) -> dict:
+    """Alias for POST /api/v1/patterns/mine via jobs router."""
+    from app.api.routes.patterns import start_pattern_mining_job
+
+    return start_pattern_mining_job(body=body)

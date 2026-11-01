@@ -26,29 +26,3 @@ explicit_hosts:
 # Automatic rule: top 5% of hosts by distinct admin users marked critical
 auto_critical_admin_pct: 0.05
 
-# Topology host definitions (backward compatibility)
-hosts:
-  - id: "web-server"
-    os: "Ubuntu 22.04"
-    services: ["http", "https"]
-    can_reach: ["app-server", "db-server"]
-
-  - id: "app-server"
-    os: "Ubuntu 22.04"
-    services: ["http"]
-    can_reach: ["db-server", "file-server"]
-
-  - id: "db-server"
-    os: "Ubuntu 22.04"
-    services: ["postgresql"]
-    can_reach: []
-
-  - id: "file-server"
-    os: "Windows Server 2022"
-    services: ["smb", "ftp"]
-    can_reach: ["dc-server"]
-
-  - id: "dc-server"
-    os: "Windows Server 2022"
-    services: ["ldap", "kerberos", "rdp"]
-    can_reach: ["web-server", "app-server", "file-server"]

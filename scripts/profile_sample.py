@@ -98,37 +98,10 @@ def get_peak_memory_mb() -> float:
     except ImportError:
         pass
 
-    # Windows fallback via K32GetProcessMemoryInfo
+    # Fast cross-platform memory via psutil
     try:
-        import ctypes
-        from ctypes import wintypes
-
-        class PROCESS_MEMORY_COUNTERS_EX(ctypes.Structure):
-            _fields_ = [
-                ("cb", wintypes.DWORD),
-                ("PageFaultCount", wintypes.DWORD),
-                ("PeakWorkingSetSize", ctypes.c_size_t),
-                ("WorkingSetSize", ctypes.c_size_t),
-                ("QuotaPeakPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaPeakNonPagedPoolUsage", ctypes.c_size_t),
-                ("QuotaNonPagedPoolUsage", ctypes.c_size_t),
-                ("PagefileUsage", ctypes.c_size_t),
-                ("PeakPagefileUsage", ctypes.c_size_t),
-                ("PrivateUsage", ctypes.c_size_t),
-            ]
-
-        pmc = PROCESS_MEMORY_COUNTERS_EX()
-        pmc.cb = ctypes.sizeof(PROCESS_MEMORY_COUNTERS_EX)
-        p = ctypes.windll.kernel32.GetCurrentProcess()
-        fn = getattr(ctypes.windll.kernel32, "K32GetProcessMemoryInfo", None) or getattr(
-            ctypes.windll.psapi, "GetProcessMemoryInfo", None
-        )
-        if fn:
-            fn.argtypes = [wintypes.HANDLE, ctypes.POINTER(PROCESS_MEMORY_COUNTERS_EX), wintypes.DWORD]
-            fn.restype = wintypes.BOOL
-            if fn(p, ctypes.byref(pmc), pmc.cb):
-                return pmc.PeakWorkingSetSize / (1024.0 * 1024.0)
+        import psutil
+        return psutil.Process().memory_info().rss / (1024.0 * 1024.0)
     except Exception:
         pass
     return 0.0

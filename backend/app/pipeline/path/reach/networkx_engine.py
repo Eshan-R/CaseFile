@@ -61,12 +61,19 @@ def _calculate_edge_prob(
     last_seen_dt = _parse_ts(edge.get("last_seen"))
 
     # 1. Base probability
-    if is_admin:
+    if edge.get("reason"):
+        base_reason = str(edge.get("reason"))
+        p = 0.9 if is_admin else min(0.8, 0.2 + 0.1 * math.log2(count + 1))
+    elif is_admin:
         p = 0.9
         base_reason = f"{src} has admin logons on {tgt}"
     else:
         p = min(0.8, 0.2 + 0.1 * math.log2(count + 1))
-        if kind == "connection":
+        port = edge.get("dst_port") or edge.get("port")
+        proto = str(edge.get("proto") or edge.get("service") or "tcp").lower()
+        if port:
+            base_reason = f"allowed on {proto}/{port} seen {count} {'times' if count != 1 else 'time'}"
+        elif kind == "connection":
             base_reason = f"{src} connected to {tgt} {count} {'times' if count != 1 else 'time'}"
         else:
             base_reason = f"{src} logged on to {tgt} {count} {'times' if count != 1 else 'time'}"

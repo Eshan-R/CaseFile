@@ -1,6 +1,39 @@
 # ATT&CK Technique → Tactic mapping (subset used by default rules)
 # Add entries here to extend label accuracy without changing code.
 
+tactic_order:
+  - reconnaissance
+  - resource_development
+  - initial_access
+  - execution
+  - persistence
+  - privilege_escalation
+  - defense_evasion
+  - credential_access
+  - discovery
+  - lateral_movement
+  - collection
+  - command_and_control
+  - exfiltration
+  - impact
+
+tactic_to_stage:
+  reconnaissance: "Reconnaissance"
+  resource_development: "Resource Development"
+  initial_access: "Initial Access"
+  execution: "Execution"
+  persistence: "Persistence"
+  privilege_escalation: "Privilege Escalation"
+  defense_evasion: "Defense Evasion"
+  credential_access: "Exploitation"
+  discovery: "Discovery"
+  lateral_movement: "Lateral Movement"
+  collection: "Collection"
+  command_and_control: "Command and Control"
+  exfiltration: "Exfiltration"
+  impact: "Impact"
+
+
 T1059:
   name: Command and Scripting Interpreter
   tactic: Execution
@@ -73,7 +106,135 @@ T1110:
   name: Brute Force
   tactic: Credential Access
 
+T1110.001:
+  name: Password Spraying / Brute Force
+  tactic: Credential Access
+
+T1110.004:
+  name: Credential Stuffing
+  tactic: Credential Access
+
+T1078.001:
+  name: Default / Administrative Accounts
+  tactic: Initial Access
+
+T1078.002:
+  name: Domain Accounts
+  tactic: Lateral Movement
+
+T1078.004:
+  name: Cloud / VPN Accounts
+  tactic: Initial Access
+
+T1136:
+  name: Create Account
+  tactic: Persistence
+
+T1136.001:
+  name: Local Account
+  tactic: Persistence
+
+T1098:
+  name: Account Manipulation
+  tactic: Persistence
+
+T1562:
+  name: Impair Defenses
+  tactic: Defense Evasion
+
+T1562.002:
+  name: Disable Windows Event Logging
+  tactic: Defense Evasion
+
+T1204:
+  name: User Execution
+  tactic: Execution
+
+T1204.002:
+  name: Malicious File
+  tactic: Execution
+
+T1046:
+  name: Network Service Discovery
+  tactic: Discovery
+
+T1021.002:
+  name: SMB/Windows Admin Shares
+  tactic: Lateral Movement
+
+T1071:
+  name: Application Layer Protocol
+  tactic: Command and Control
+
+T1071.001:
+  name: Web Protocols
+  tactic: Command and Control
+
+T1071.004:
+  name: DNS
+  tactic: Command and Control
+
+T1573:
+  name: Encrypted Channel
+  tactic: Command and Control
+
+T1048:
+  name: Exfiltration Over Alternative Protocol
+  tactic: Exfiltration
+
+T1048.002:
+  name: Exfiltration Over Asymmetric Protocol
+  tactic: Exfiltration
+
+T1048.003:
+  name: Exfiltration Over Alternative Protocol - DNS
+  tactic: Exfiltration
+
+T1030:
+  name: Data Transfer Size Limits
+  tactic: Exfiltration
+
+T1189:
+  name: Drive-by Compromise
+  tactic: Initial Access
+
 T1190:
   name: Exploit Public-Facing Application
   tactic: Initial Access
+
+T1595.002:
+  name: Vulnerability Scanning
+  tactic: Reconnaissance
+
+T1059.004:
+  name: Unix Shell
+  tactic: Execution
+
+T1059.007:
+  name: JavaScript
+  tactic: Execution
+
+T1505:
+  name: Server Software Component
+  tactic: Persistence
+
+T1505.003:
+  name: Web Shell
+  tactic: Persistence
+
+T1498:
+  name: Network Denial of Service
+  tactic: Impact
+
+T1498.001:
+  name: Direct Network Flood
+  tactic: Impact
+
+T1498.002:
+  name: Reflection Amplification
+  tactic: Impact
+
+T1499.002:
+  name: Endpoint DOS - Service Exhaustion
+  tactic: Impact
 
